@@ -103,7 +103,7 @@
   #rcNote { flex:1 1 240px; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--bg); border:1px solid var(--line2); border-radius:8px; padding:0 12px; height:32px; }
   #nav #rcHint { flex-basis:100%; font-size:12px; }
   #mapChanged { position:fixed; top:calc(var(--bar-h) + 12px); left:50%; transform:translateX(-50%); z-index:19; display:flex; gap:10px; align-items:center; background:var(--panel); border:1px solid rgba(232,176,74,.55); color:var(--warn); border-radius:999px; padding:6px 8px 6px 14px; font-size:13px; box-shadow:0 12px 32px rgba(0,0,0,.5); }
-  /* El mapa es un lienzo infinito: nada hace scroll, el mundo se mueve con translate + scale. Los puntos del fondo los mueve applyView(). */
+  /* The map is an infinite canvas: nothing scrolls, the world moves with translate + scale. applyView() moves the background dots. */
   #view { flex:1; overflow:hidden; position:relative; cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none;
     background-color:var(--bg); background-image:radial-gradient(circle, #28303a 1.3px, transparent 1.5px);
     background-size:28px 28px; }
@@ -169,7 +169,7 @@
   .res .t { display:block; color:var(--muted); font-size:12px; }
   .res.sel { border-color:var(--accent); }
 
-  /* ---- diálogo de detalle: flota a la derecha; el mapa sigue visible y usable detrás ---- */
+  /* ---- detail dialog: floats on the right; the map stays visible and usable behind it ---- */
   #nav { position:fixed; top:var(--bar-h); right:0; bottom:0; width:400px; z-index:15; display:flex; flex-direction:column; background:var(--panel); border-left:1px solid var(--line); overflow:hidden; }
   #navHead { flex:none; display:flex; align-items:center; gap:6px; padding:10px 8px 10px 16px; border-bottom:1px solid var(--line); }
   #navTitle { flex:1; min-width:0; }
@@ -480,14 +480,14 @@ const svgEl = (tag, attrs = {}) => {
   return n;
 };
 const thumbOf = s => s.thumb || s.image;
-// El «antes» de una pantalla: la imagen de hoy (`baseline`, ver `add --before`) o la última recaptura aceptada (`previous`).
+// The "before" of a screen: today's image (`baseline`, see `add --before`) or the last accepted re-capture (`previous`).
 const beforeOf = s => s.baseline || s.previous;
 const beforeThumbOf = s => s.baseline ? (s.baselineThumb || s.baseline) : s.previous;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-// localStorage puede faltar o lanzar (ventana privada, sitio bloqueado): el visor funciona igual sin él.
+// localStorage may be missing or throw (private window, blocked site): the viewer works the same without it.
 const store = {
   get(key) { try { return localStorage.getItem('flowmap-' + key); } catch (e) { return null; } },
-  set(key, value) { try { if (value == null) localStorage.removeItem('flowmap-' + key); else localStorage.setItem('flowmap-' + key, value); } catch (e) { /* opcional */ } },
+  set(key, value) { try { if (value == null) localStorage.removeItem('flowmap-' + key); else localStorage.setItem('flowmap-' + key, value); } catch (e) { /* optional */ } },
 };
 // Connections: one class on #view hides every edge line and label (nothing is redrawn); the choice is kept per browser and applied before the map is drawn
 function setEdgesShown(shown) {
@@ -531,10 +531,10 @@ function updateLegend() {
   ].join(' · ');
 }
 
-// ---------- mapa ----------
+// ---------- map ----------
 const aspect = s => s.width && s.height ? s.width / s.height : (DATA.platform === 'web' ? 1.6 : .46);
 const thumbW = s => Math.round(Math.min(480, Math.max(130, THUMB_H * aspect(s))));
-// Una pantalla con «antes» se dibuja en el mapa como un par, antes y después lado a lado.
+// A screen with a "before" is drawn on the map as a pair, before and after side by side.
 const hasBefore = screens.some(beforeOf);
 let sbs = hasBefore;
 if (store.get('sbs')) sbs = store.get('sbs') === 'on';
@@ -542,19 +542,19 @@ const PAIR_GAP = 14;
 const nodeW = s => sbs && beforeOf(s) ? 2 * thumbW(s) + PAIR_GAP : thumbW(s);
 const pos = {};
 
-// Posiciones que dejó la persona arrastrando; mandan sobre el layout automático. Con `flowmap.py serve` se guardan en
-// <mapa>/layout.json (y `build` las incrusta); abierto como archivo, se quedan en este navegador. Una sola fuente a la vez:
-// la guardada en este navegador si existe, si no la incrustada (mezclarlas dejaría posiciones de dos sesiones distintas).
+// Positions left by the person dragging; they take precedence over the automatic layout. With `flowmap.py serve` they are saved in
+// <map>/layout.json (and `build` embeds them); opened as a file, they stay in this browser. One source at a time:
+// the one saved in this browser if it exists, otherwise the embedded one (mixing them would leave positions from two different sessions).
 const LKEY = 'layout:' + DATA.title;
 const known = positions => Object.fromEntries(Object.entries(positions).filter(([id]) => byId[id]));
 const localCustom = () => { try { return JSON.parse(store.get(LKEY) || 'null'); } catch (e) { return null; } };
 let custom = known(localCustom() || DATA.layout || {});
 
-// Grupos: pantallas que se mueven juntas. Viven en <mapa>/groups.json (solo con servidor); `selected` es la selección múltiple del lienzo.
+// Groups: screens that move together. They live in <map>/groups.json (server only); `selected` is the canvas multi-selection.
 let groups = [];
 const selected = new Set();
 
-let cur = null;  // la pantalla abierta en el diálogo (o la última que se abrió)
+let cur = null;  // the screen open in the dialog (or the last one opened)
 let exporting = false;  // a route video is rendering
 let exportTarget = null;  // the screen that export was started for
 const EXPORT_PROGRESS = 'Rendering the route video…';
@@ -579,7 +579,7 @@ function layout() {
     const local = {};
     let rows = Math.max(1, ...Object.values(stacks)), cols;
     if (rows > MAX_ROWS) {
-      // un flujo largo no cabe en una columna por nivel: se reparte en columnas de MAX_ROWS pantallas, en orden de recorrido
+      // a long flow does not fit in one column per level: it is split into columns of MAX_ROWS screens, in traversal order
       const order = ids.slice().sort((a, b) => depth[a] - depth[b]);
       order.forEach((id, i) => { local[id] = { x: Math.floor(i / MAX_ROWS) * (cw + GAP_X), y: BAND_HEAD + (i % MAX_ROWS) * ROW_PITCH }; });
       rows = MAX_ROWS; cols = Math.ceil(ids.length / MAX_ROWS);
@@ -593,7 +593,7 @@ function layout() {
     }
     return { local, w: cols * (cw + GAP_X), h: BAND_HEAD + rows * ROW_PITCH + 20 };
   });
-  // un mapa grande reparte los flujos en carriles, cada uno bajo el más corto, para que no sea una torre; uno pequeño los apila
+  // a large map spreads the flows into lanes, each under the shortest, so it is not a tower; a small one stacks them
   const lanes = Array.from({ length: screens.length > BIG_MAP ? LANES : 1 }, () => ({ top: 20, w: 0, bands: [] }));
   bands.forEach(band => {
     const lane = lanes.reduce((best, l) => l.top < best.top ? l : best);
@@ -607,7 +607,7 @@ function layout() {
   Object.entries(custom).forEach(([id, p]) => { if (pos[id]) pos[id] = { x: p.x, y: p.y }; });
   placeZones();
 }
-// El título de un flujo va sobre sus pantallas: se coloca desde donde estén, no desde donde las puso el layout automático.
+// The title of a flow sits above its screens: it is placed from where they are, not from where the automatic layout put them.
 function zoneBox(flow) {
   const own = screens.filter(s => s.flow === flow.id && pos[s.id]).map(s => pos[s.id]);
   return own.length ? { x: Math.min(...own.map(p => p.x)), y: Math.min(...own.map(p => p.y)) - BAND_HEAD } : null;
@@ -622,7 +622,7 @@ function placeZones() {
   });
 }
 
-// salta a una pantalla del mapa: la centra y la destaca un instante (no abre el detalle)
+// jumps to a screen of the map: centres it and highlights it for a moment (does not open the detail)
 function focusScreen(id) {
   revealFlowOf(id);
   const n = nodeEl(id);
@@ -630,7 +630,7 @@ function focusScreen(id) {
   centerOn(id, Math.max(zoom, FOCUS_Z));
   n.classList.remove('flash'); void n.offsetWidth; n.classList.add('flash');
 }
-let drawn = null;  // los elementos de la flecha que se está dibujando (para poder rehacer solo esa)
+let drawn = null;  // the elements of the arrow being drawn (so only that one can be redone)
 function label(x, y, text, cls = '', to = null) {
   const d = el(to ? 'button' : 'div', 'lab ' + cls, text);
   d.style.left = x + 'px'; d.style.top = y + 'px';
@@ -644,7 +644,7 @@ function path(d, { dashed = false, pending = false, to = null } = {}) {
   const line = svgEl('path', pending ? { ...attrs, class: 'front' } : attrs);
   $('svg').appendChild(line);
   drawn?.push(line);
-  if (to) {  // franja ancha e invisible para poder pulsar la línea
+  if (to) {  // wide, invisible strip so the line can be clicked
     const hit = svgEl('path', { d, fill: 'none', stroke: 'transparent', 'stroke-width': 16, class: 'hit' });
     hit.onclick = () => focusScreen(to);
     $('svg').appendChild(hit);
@@ -652,9 +652,9 @@ function path(d, { dashed = false, pending = false, to = null } = {}) {
   }
 }
 
-const edgeEls = new Map();  // arista (o rama sin explorar) -> sus elementos dibujados
-// En un mapa grande las flechas entre flujos son una maraña y las etiquetas tapan las miniaturas (y sus clics): las flechas entre
-// flujos y todas las etiquetas solo se dibujan para la pantalla abierta (el diálogo las lista todas).
+const edgeEls = new Map();  // edge (or unexplored branch) -> its drawn elements
+// On a large map the arrows between flows are a tangle and the labels cover the thumbnails (and their clicks): the arrows between
+// flows and all the labels are only drawn for the open screen (the dialog lists them all).
 const touchesOpen = e => e.from === cur || e.to === cur;
 const crossFlowHidden = e => screens.length > BIG_MAP && byId[e.from].flow !== byId[e.to].flow && !touchesOpen(e);
 const labelHidden = e => screens.length > BIG_MAP && !touchesOpen(e);
@@ -667,11 +667,11 @@ function drawEdge(e) {
     path(`M${sx},${sy} C${sx + dx},${sy} ${tx - dx},${ty} ${tx},${ty}`, { to: e.to });
     if (!labelHidden(e)) label((sx + tx) / 2, (sy + ty) / 2, e.action, '', e.to);
   } else {
-    // vuelta o salto atrás: rodea por debajo de las miniaturas
+    // a return or jump back: goes around below the thumbnails
     const sx = a.x + aw / 2, sy = a.y + TAG_H + THUMB_H, tx = b.x + bw / 2, ty = b.y + TAG_H + THUMB_H;
     const yb = Math.max(sy, ty) + 55;
     path(`M${sx},${sy} C${sx},${yb} ${tx},${yb} ${tx},${ty}`, { dashed: true, to: e.to });
-    if (!labelHidden(e)) label((sx + tx) / 2, (sy + ty) / 8 + 0.75 * yb, `${e.action} → ${byId[e.to].title}`, '', e.to);  // la vuelta cae lejos: el destino va en la etiqueta
+    if (!labelHidden(e)) label((sx + tx) / 2, (sy + ty) / 8 + 0.75 * yb, `${e.action} → ${byId[e.to].title}`, '', e.to);  // the return lands far away: the destination goes in the label
   }
 }
 function drawFrontier(id) {
@@ -683,7 +683,7 @@ function drawFrontier(id) {
     label(sx + 8, sy - 4, 'unexplored: ' + f.action, 'f');
   });
 }
-// Dibuja una flecha recordando sus elementos; si ya estaba dibujada, primero quita los viejos.
+// Draws an arrow remembering its elements; if it was already drawn, it first removes the old ones.
 function track(key, draw) {
   edgeEls.get(key)?.forEach(n => n.remove());
   const els = drawn = [];
@@ -700,7 +700,7 @@ function clearEdges() {
   $('svg').querySelectorAll(':scope > path').forEach(n => n.remove());
   edgeEls.clear();
 }
-// Al arrastrar una pantalla solo se rehacen sus flechas (unas pocas), no las de todo el mapa.
+// When dragging a screen only its arrows are redone (a few), not those of the whole map.
 const movedIds = new Set();
 function redrawEdgesOf(ids) {
   DATA.edges.filter(e => ids.has(e.from) || ids.has(e.to)).forEach(e => track(e, () => drawEdge(e)));
@@ -740,7 +740,7 @@ function drawNodes() {
     setPicked(b, selected.has(s.id));
     b.onclick = e => {
       if (canAnnotate && (e.shiftKey || e.ctrlKey || e.metaKey)) return toggleSelected(s.id);
-      openNav(s.id, true, e.target.closest('.half')?.dataset.side);  // en un par, cada mitad abre su propia captura
+      openNav(s.id, true, e.target.closest('.half')?.dataset.side);  // in a pair, each half opens its own capture
     };
     // Space picks the focused screen like shift-click; both phases are cancelled so the button does not also "click" and open the detail
     b.onkeydown = e => { if (canAnnotate && e.key === ' ') { e.preventDefault(); if (!e.repeat) toggleSelected(s.id); } };
@@ -749,14 +749,14 @@ function drawNodes() {
   });
 }
 
-// ---------- lienzo infinito: pan y zoom ----------
-// Nada hace scroll: el mundo (#canvas) se mueve con translate + scale y los puntos del fondo siguen el mismo movimiento.
+// ---------- infinite canvas: pan and zoom ----------
+// Nothing scrolls: the world (#canvas) moves with translate + scale and the background dots follow the same movement.
 let zoom = 1, tx = 20, ty = 20, animId = 0;
 const MIN_Z = .05, MAX_Z = 2, FOCUS_Z = .45, viewEl = $('view');
 const clampZ = z => clamp(z, MIN_Z, MAX_Z);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-// Las miniaturas miden unos 560 px de alto: bastan para ver todo el mapa y se ven blandas con zoom. Al pasar de ese tamaño
-// se cambian por la captura original, solo las que se ven (en un mapa grande, pedir todas a la vez es lo caro).
+// The thumbnails are about 560 px tall: enough to see the whole map, and they look soft when zoomed. Past that size
+// they are swapped for the original capture, only the visible ones (on a large map, requesting all at once is the expensive part).
 const intersectsView = r => { const v = viewEl.getBoundingClientRect(); return r.right > v.left && r.left < v.right && r.bottom > v.top && r.top < v.bottom; };
 let resTimer = 0;
 function syncResolution() {
@@ -769,13 +769,13 @@ function syncResolution() {
 }
 function applyView() {
   $('canvas').style.transform = `translate(${tx}px,${ty}px) scale(${zoom})`;
-  // el fondo de puntos va por estilo directo: una variable CSS en #view invalidaría el estilo de todos los nodos en cada fotograma
+  // the dot background uses direct style: a CSS variable on #view would invalidate the style of every node on each frame
   viewEl.style.backgroundPosition = `${tx}px ${ty}px`;
   viewEl.style.backgroundSize = `${28 * zoom}px ${28 * zoom}px`;
   $('zlabel').textContent = Math.round(zoom * 100) + '%';
-  clearTimeout(resTimer); resTimer = setTimeout(syncResolution, 150);  // al terminar el gesto, no en cada fotograma
+  clearTimeout(resTimer); resTimer = setTimeout(syncResolution, 150);  // when the gesture ends, not on every frame
 }
-// el hueco que deja libre el diálogo de detalle: el mapa se centra en lo que se ve, no en lo que tapa el diálogo
+// the space the detail dialog leaves free: the map is centred on what is visible, not on what the dialog covers
 const visibleW = () => viewEl.clientWidth - ($('nav').hidden ? 0 : $('nav').offsetWidth + 24);
 function cancelAnim() { cancelAnimationFrame(animId); }
 function animateTo(nz, ntx, nty, ms = 320) {
@@ -802,7 +802,7 @@ function centerOn(id, z = zoom) {
   const b = screenBox(id);
   animateTo(z, visibleW() / 2 - (b.x + b.w / 2) * z, viewEl.clientHeight / 2 - (b.y + b.h / 2) * z);
 }
-// El rectángulo que ocupa el mapa (pantallas y títulos de flujo) con un margen; sale de las posiciones actuales, también las arrastradas.
+// The rectangle the map occupies (screens and flow titles) with a margin; it comes from the current positions, dragged ones included.
 function bounds() {
   const boxes = shownScreens().map(sc => screenBox(sc.id));
   const x0 = Math.min(...boxes.map(b => b.x)), x1 = Math.max(...boxes.map(b => b.x + b.w));
@@ -815,7 +815,7 @@ function fit() {
   const z = clampZ(Math.min(1, (vw - 2 * pad) / w, (vh - 2 * pad) / h));
   animateTo(z, (vw - w * z) / 2 - b.x0 * z, (vh - h * z) / 2 - b.y0 * z);
 }
-// sigue al diálogo: si la pantalla elegida queda fuera de lo visible (o tapada por el diálogo), el mapa se desplaza hasta ella
+// follows the dialog: if the chosen screen falls outside the visible area (or is covered by the dialog), the map scrolls to it
 function selectOnMap(id) {
   document.querySelectorAll('.node.cur').forEach(n => n.classList.remove('cur'));
   nodeEl(id)?.classList.add('cur');
@@ -826,10 +826,10 @@ function selectOnMap(id) {
   if (!inside) centerOn(id, Math.max(zoom, FOCUS_Z));
 }
 
-// Un solo gesto a la vez: arrastrar una pantalla la mueve, arrastrar el fondo mueve el mapa, dos dedos hacen zoom.
-// Un arrastre no cuenta como clic sobre la pantalla que había debajo.
+// One gesture at a time: dragging a screen moves it, dragging the background moves the map, two fingers zoom.
+// A drag does not count as a click on the screen underneath.
 const ptrs = new Map();
-const DRAG_PX = 6;  // un toque de trackpad tiembla unos píxeles y tiene que seguir siendo un clic
+const DRAG_PX = 6;  // a trackpad tap jitters a few pixels and must still be a click
 let gesture = null, pinch = null, suppressClick = false;
 const pdist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
 const pmid = () => { const [a, b] = [...ptrs.values()], r = viewEl.getBoundingClientRect(); return { x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top }; };
@@ -840,8 +840,8 @@ function resetPointers() {
 viewEl.addEventListener('pointerdown', e => {
   if (e.button > 1 || e.target.closest('#hint, #empty')) return;
   cancelAnim();
-  // Un ratón es un solo puntero. Si se perdió un «soltar» (fuera de la ventana, bajo una herramienta de capturas, un menú
-  // contextual), se olvida: si no, la siguiente pulsación parecería un pellizco de dos dedos y se tragaría todos los clics.
+  // A mouse is a single pointer. If a "release" was lost (outside the window, under a screenshot tool, a context
+  // menu), forget it: otherwise the next press would look like a two-finger pinch and swallow every click.
   if (e.pointerType === 'mouse') resetPointers();
   suppressClick = false;
   ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -851,7 +851,7 @@ viewEl.addEventListener('pointerdown', e => {
 });
 addEventListener('pointermove', e => {
   if (!ptrs.has(e.pointerId)) return;
-  if (e.pointerType === 'mouse' && e.buttons === 0) { endPointer(e); return; }  // se soltó el botón en algún sitio que no vimos
+  if (e.pointerType === 'mouse' && e.buttons === 0) { endPointer(e); return; }  // the button was released somewhere we did not see
   ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pinch && ptrs.size === 2) {
     const z = clampZ(pinch.z * pdist() / pinch.d), k = z / pinch.z, m = pmid();
@@ -876,7 +876,7 @@ function endPointer(e) {
   if (!ptrs.delete(e.pointerId)) return;
   if (gesture?.moved) {
     suppressClick = true;
-    if (gesture.el) {  // soltar guarda la posición; un clic sin arrastrar sigue abriendo el detalle
+    if (gesture.el) {  // releasing saves the position; a click without dragging still opens the detail
       gesture.el.classList.remove('dragging');
       [gesture.id, ...gesture.others.map(m => m.id)].forEach(id => { custom[id] = { ...pos[id] }; });
       saveLayout(); placeZones();
@@ -887,7 +887,7 @@ function endPointer(e) {
 }
 addEventListener('pointerup', endPointer); addEventListener('pointercancel', endPointer);
 viewEl.addEventListener('click', e => { if (suppressClick) { e.stopPropagation(); e.preventDefault(); } }, true);
-// rueda: mueve el mapa; con Ctrl/⌘ (o el pellizco de un trackpad, que llega como Ctrl+rueda) hace zoom hacia el cursor
+// wheel: moves the map; with Ctrl/⌘ (or a trackpad pinch, which arrives as Ctrl+wheel) it zooms toward the cursor
 viewEl.addEventListener('wheel', e => {
   e.preventDefault(); cancelAnim();
   if (e.ctrlKey || e.metaKey) {
@@ -906,7 +906,7 @@ addEventListener('keydown', e => {
   else if (e.key.toLowerCase() === 'g' && canAnnotate && selected.size >= 2) { e.preventDefault(); startNaming(); }
   else if (e.key === 'Escape' && selected.size && $('nav').hidden) clearSelection();
 });
-// un clic en el fondo (no en una pantalla ni en la etiqueta de un grupo) deja la selección
+// a click on the background (not on a screen or a group label) clears the selection
 viewEl.addEventListener('click', e => { if (!e.target.closest('.node,.group-label,#hint')) clearSelection(); });
 addEventListener('resize', () => { if (!$('nav').hidden && cur) selectOnMap(cur); });
 
@@ -934,7 +934,7 @@ function showEmptyMapHelp() {
   selectTab($('tabNew'));
 }
 
-// se vuelve a llamar al ocultar o mostrar flujos
+// called again when flows are hidden or shown
 function rebuildMap(first = false) {
   $('canvas').querySelectorAll('.zone,.node,.group').forEach(n => n.remove());
   clearEdges();
@@ -953,7 +953,7 @@ function rebuildMap(first = false) {
   drawEdges(); drawNodes(); drawGroups(); renderPills();
   [...selected].filter(id => !pos[id]).forEach(id => selected.delete(id));
   refreshGroupUi();
-  if (first) { zoom = clamp(viewEl.clientWidth / (bounds().x1 - LEFT), .3, 1); tx = 20; ty = 20; } // legible al abrir; "Fit" (0) muestra todo
+  if (first) { zoom = clamp(viewEl.clientWidth / (bounds().x1 - LEFT), .3, 1); tx = 20; ty = 20; } // readable on open; "Fit" (0) shows everything
   applyView();
   applySearchDim();
   if (cur && !$('nav').hidden) renderRails();
@@ -987,7 +987,7 @@ function saveLayout() {
   updateResetBtn();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
-    if (!canAnnotate) { localLayout(); return; }  // sin servidor: se queda en este navegador
+    if (!canAnnotate) { localLayout(); return; }  // no server: it stays in this browser
     try {
       const r = await callJson('layout', 'PUT', { positions: custom });
       if (!r.ok) throw new Error(r.status);
@@ -995,14 +995,14 @@ function saveLayout() {
   }, 350);
 }
 $('resetBtn').onclick = async () => {
-  if (!resetArmed) {  // dos pasos en vez de un diálogo modal: un confirm() bloquearía el visor
+  if (!resetArmed) {  // two steps instead of a modal dialog: a confirm() would block the viewer
     resetArmed = true; updateResetBtn();
     setTimeout(() => { if (resetArmed) { resetArmed = false; updateResetBtn(); } }, 3000);
     return;
   }
   resetArmed = false; custom = {};
   store.set(LKEY, null);
-  if (canAnnotate) { try { await call('layout', { method: 'DELETE' }); } catch (e) { /* queda la local */ } }
+  if (canAnnotate) { try { await call('layout', { method: 'DELETE' }); } catch (e) { /* the local one stays */ } }
   updateResetBtn(); rebuildMap(); fit();
 };
 function revealFlowOf(id) {
@@ -1017,8 +1017,8 @@ const syncSbs = () => setToggle('sbsBtn', sbs);
 syncSbs();
 $('sbsBtn').onclick = () => { sbs = !sbs; syncSbs(); store.set('sbs', sbs ? 'on' : 'off'); rebuildMap(); fit(); };
 
-// ---------- grupos ----------
-const GROUP_PAD = 24, GROUP_HEAD = 80;  // el hueco de arriba deja sitio al título del flujo y a la etiqueta del grupo
+// ---------- groups ----------
+const GROUP_PAD = 24, GROUP_HEAD = 80;  // the gap on top leaves room for the flow title and the group label
 const groupMates = id => {
   const group = groups.find(g => g.members.includes(id));
   return group ? group.members.filter(m => m !== id && pos[m] && nodeEl(m)).map(m => ({ id: m, ox: pos[m].x, oy: pos[m].y })) : [];
@@ -1104,13 +1104,13 @@ $('groupForm').onsubmit = e => {
   saveGroups([...rest, { id, name, members }]);
 };
 
-// ---------- navegador ----------
+// ---------- navigator ----------
 let htmlOf = null;  // id of the screen whose live HTML the detail shows instead of its capture
 let trail = [], compare = false, showingBefore = false, hotspotsOn = store.get('hotspots') !== 'off';
 let histScreen = null, histVersions = [], histPick = null;  // the screen whose versions are loaded, them, and the older one the detail shows (an image path)
 const hotByEdge = new Map();
 
-// Un solo modelo: al centro la pantalla, a la izquierda de dónde viene, a la derecha a dónde puede ir.
+// One model: the screen in the centre, where it comes from on the left, where it can go on the right.
 const backTarget = () => trail.length ? trail[trail.length - 1] : inc[cur].find(e => e.from !== cur)?.from;
 
 function railCard(edge, dir, key, here) {
@@ -1130,7 +1130,7 @@ function railCard(edge, dir, key, here) {
   return b;
 }
 
-// Camino mostrado arriba: lo recorrido, precedido por el camino más corto desde la entrada hasta donde empezaste (mapa o buscador).
+// Path shown on top: what was walked, preceded by the shortest path from the entry to where you started (map or search).
 function route() {
   const start = trail.length ? trail[0] : cur;
   const prev = { [DATA.entry]: null }, queue = [DATA.entry];
@@ -1260,7 +1260,7 @@ function render() {
   if (compare) showingBefore = false;
   const main = showingBefore ? before : s.image;
   $('shot').src = main; $('shot').alt = s.title + (showingBefore ? ' (before)' : '');
-  $('annBtn').disabled = $('wholeBtn').disabled = showingBefore;  // las anotaciones recortan la captura nueva
+  $('annBtn').disabled = $('wholeBtn').disabled = showingBefore;  // annotations crop the new capture
   if (showingBefore) setAnnotating(false);
   $('cmpBtn').hidden = !before;
   $('shotPrev').hidden = !compare;
@@ -1299,12 +1299,12 @@ function render() {
   selectOnMap(cur);
 }
 
-const taken = new Map();  // pantalla que bifurca -> salida que tomaste la última vez
+const taken = new Map();  // screen that branches -> exit taken last time
 function go(id) { revealFlowOf(id); taken.set(cur, id); trail.push(cur); cur = id; render(); }
 function jumpTo(ids, i) { trail = ids.slice(0, i); revealFlowOf(ids[i]); cur = ids[i]; render(); }
 function goBack() {
   if (trail.length) cur = trail.pop();
-  else { const t = backTarget(); if (!t) return; revealFlowOf(t); cur = t; }  // sin recorrido (saltaste desde el mapa o el buscador): sube al origen en el grafo
+  else { const t = backTarget(); if (!t) return; revealFlowOf(t); cur = t; }  // no walked path (you jumped from the map or the search): go up to the origin in the graph
   render();
 }
 function openNav(id, fresh, side = 'after') {
@@ -1317,7 +1317,7 @@ function openNav(id, fresh, side = 'after') {
 }
 function closeNav() {
   if (histPick) { histPick = null; compare = showingBefore = false; }
-  $('nav').hidden = true; history.replaceState(null, '', location.pathname);  // la pantalla queda marcada en el mapa
+  $('nav').hidden = true; history.replaceState(null, '', location.pathname);  // the screen stays marked on the map
   updateTargetControls();
 }
 
@@ -1354,7 +1354,7 @@ addEventListener('keydown', e => {
   else if (/^[1-9]$/.test(e.key) && choices[e.key - 1]) go(choices[e.key - 1].to);
 });
 
-// ---------- buscador ----------
+// ---------- search ----------
 const norm = t => (t || '').toLowerCase();
 const hay = Object.fromEntries(screens.map(sc => [sc.id, {
   title: norm(sc.title),
@@ -1416,7 +1416,7 @@ function bindSearch(input) {
 }
 bindSearch($('q'));
 
-// ---------- cambios: cada captura de cada pantalla, la más nueva primero ----------
+// ---------- changes: every capture of every screen, newest first ----------
 function openChange(change) {
   $('changesPop').hidden = true;
   openNav(change.screen, true);
@@ -1449,7 +1449,7 @@ addEventListener('click', e => {
   if (!e.target.closest('.pop, #flowsBtn, #changesBtn, input[type=search]')) { $('results').hidden = true; $('flowsPop').hidden = true; $('changesPop').hidden = true; }
 });
 
-// ---------- anotaciones (requieren `flowmap.py serve`) ----------
+// ---------- annotations (require `flowmap.py serve`) ----------
 let attachChosen = false;  // once the designer ticks or unticks "Attach my comments", the default stops following the comments
 let anns = [], canAnnotate = false, annotating = false, pending = null, drag = null, editing = null, clearArmed = false;
 const call = (url, opts = {}) => fetch('__flowmap/' + url, { ...opts, headers: { 'X-Flowmap': '1', ...(opts.headers || {}) } });
@@ -1614,7 +1614,7 @@ async function saveEdit(comment) {
   anns = anns.map(a => a.id === body.id ? body : a); cancelForm(); say('Note updated.'); refreshAnn();
 }
 async function clearScreen() {
-  if (!clearArmed) {  // dos pasos en vez de un diálogo modal: un confirm() bloquearía el visor
+  if (!clearArmed) {  // two steps instead of a modal dialog: a confirm() would block the viewer
     clearArmed = true; refreshAnn();
     setTimeout(() => { if (clearArmed) { clearArmed = false; refreshAnn(); } }, 3000);
     return;
@@ -1646,7 +1646,7 @@ $('ann').onpointermove = ev => {
 $('ann').onpointerup = () => {
   if (!drag) return;
   drag = null;
-  if (!pending || pending.w < .01 || pending.h < .01) { startWhole(); return; }  // un clic sin arrastrar marca toda la pantalla
+  if (!pending || pending.w < .01 || pending.h < .01) { startWhole(); return; }  // a click without dragging marks the whole screen
   $('annForm').hidden = false; $('annText').focus(); say('Write what you want for this area.');
 };
 $('annText').onkeydown = ev => { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) saveAnn(); else if (ev.key === 'Escape') { cancelForm(); refreshAnn(); } };
@@ -1667,7 +1667,7 @@ async function loadAnns() {
     anns = await r.json(); canAnnotate = true;
   } catch (e) { canAnnotate = false; }
   refreshAnn();
-  if (canAnnotate) {  // con servidor manda la disposición guardada en la carpeta, no la que haya quedado en este navegador
+  if (canAnnotate) {  // with a server, the layout saved in the folder wins, not whatever stayed in this browser
     await Promise.all([loadLayout(), loadGroups()]);
     updateResetBtn(); rebuildMap();
   }
@@ -1675,7 +1675,7 @@ async function loadAnns() {
 async function loadLayout() {
   try {
     custom = known((await (await call('layout')).json()).positions);
-  } catch (e) { /* se queda con la embebida */ }
+  } catch (e) { /* keep the embedded one */ }
 }
 async function loadGroups() {
   try {
@@ -1686,7 +1686,7 @@ async function loadGroups() {
   } catch (e) { groupSay(e.message || 'The groups could not be read.'); }
 }
 
-// ---------- pedir cambios a la sesión de Claude Code ligada al mapa ----------
+// ---------- ask the Claude Code session linked to the map for changes ----------
 $('askAttach').onchange = () => { attachChosen = true; };
 // the dock's three panes, one shown at a time (each tab names its pane in aria-controls); what Claude answers always goes to the "Change the map" pane, so that is the one shown
 const dockTabs = [...document.querySelectorAll('#dockTabs [role=tab]')];
@@ -1723,7 +1723,7 @@ async function showAskBox() {
     $('askState').className = !session.linked ? '' : sessionAlive ? 'ok' : 'warn';
     $('askWorker').hidden = !session.linked || sessionAlive;
     $('designContract').hidden = false;
-  } catch (e) { /* sin servidor no hay a quién pedir */ }
+  } catch (e) { /* without a server there is no one to ask */ }
 }
 setInterval(() => { if (!document.hidden) showAskBox(); }, 10000);
 $('askHelpBtn').onclick = async () => {

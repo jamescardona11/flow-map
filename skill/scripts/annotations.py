@@ -1,7 +1,7 @@
-"""Anotaciones sobre las pantallas de un mapa: recuadro + comentario.
+"""Annotations on the screens of a map: box + comment.
 
-La app Flow Map las escribe en <mapa>/temp/annotations.json (con el recorte en temp/<id>.png); `export` las lee y
-produce el texto que se le pasa a Claude, con rutas absolutas del recorte y de la pantalla completa.
+The Flow Map app writes them to <map>/temp/annotations.json (with the crop in temp/<id>.png); `export` reads them and
+produces the text handed to Claude, with absolute paths of the crop and of the full screen.
 """
 import json
 from collections import deque
@@ -33,7 +33,7 @@ def _has(root, ids):
 
 
 def _route(data, screen_id):
-    """Camino más corto desde la entrada: 'A → [acción] → B'. None si no hay camino registrado."""
+    """Shortest path from the entry: 'A → [action] → B'. None if no path is recorded."""
     titles = {s["id"]: s["title"] for s in data["screens"]}
     previous = {data["entry"]: None}
     queue = deque([data["entry"]])
@@ -61,14 +61,14 @@ PREAMBLE = (
 
 
 def export(root, ids=None, preamble=True):
-    """Markdown para pegar en Claude: qué pantalla, cómo llegar, dónde está el recorte y qué se pidió.
+    """Markdown to paste into Claude: which screen, how to reach it, where the crop is and what was asked.
 
-    Si `root` es una carpeta de mapas en vez de un mapa, junta los que tengan anotaciones bajo una sola instrucción.
+    If `root` is a folder of maps instead of one map, it gathers those that have annotations under a single instruction.
     """
     root = Path(root).resolve()
     if not (root / "map.json").exists():
         if not root.is_dir():
-            raise flowmap.FlowMapError(f"No existe la carpeta {root}")
+            raise flowmap.FlowMapError(f"Folder {root} does not exist")
         sections = [export(m, ids, preamble=False) for m in map_folders(root) if _has(m, ids)]
         return "\n".join([PREAMBLE + "\n", *sections]) if sections else "No annotations.\n"
     data = flowmap._load(root)

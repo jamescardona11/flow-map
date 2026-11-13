@@ -1,4 +1,4 @@
-"""Historial: `update` conserva cada captura reemplazada en history/<id>/<YYYYMMDDTHHMMSSZ>.<ext>."""
+"""History: `update` keeps every replaced capture in history/<id>/<YYYYMMDDTHHMMSSZ>.<ext>."""
 import os
 import sys
 import tempfile
@@ -12,7 +12,7 @@ import flowmap  # noqa: E402
 from test_flowmap import make_png  # noqa: E402
 
 TAKEN = "2026-10-29T12:23:17+00:00"
-TAKEN_EPOCH = 1793276597  # el mismo instante, en segundos desde 1970 UTC
+TAKEN_EPOCH = 1793276597  # the same instant, in seconds since 1970 UTC
 
 
 class HistoryTest(unittest.TestCase):
@@ -30,7 +30,7 @@ class HistoryTest(unittest.TestCase):
         flowmap.add(self.root, screen_id, title=screen_id, flow="Main", image=self.png(f"{screen_id}.png", shade), captured_at=captured_at)
 
     def set_captured_at(self, screen_id, value):
-        """`update` sella la captura nueva con la hora de ahora; así el test fija la hora de la «vieja»."""
+        """`update` stamps the new capture with the current time; this lets the test set the time of the «old» one."""
         data = flowmap._load(self.root)
         screen = next(s for s in data["screens"] if s["id"] == screen_id)
         if value is None:
@@ -52,13 +52,13 @@ class HistoryTest(unittest.TestCase):
         self.assertEqual((self.root / "history/home/20261029T122317Z.png").read_bytes(), first)
 
         second = (self.root / "screens" / "home.png").read_bytes()
-        flowmap.update(self.root, "home", self.png("v2-again.png", shade=10))  # misma huella: no hay cambio
+        flowmap.update(self.root, "home", self.png("v2-again.png", shade=10))  # same fingerprint: no change
         self.assertEqual(self.history("home"), ["20261029T122317Z.png"])
 
         flowmap.ack(self.root, "home")
         self.assertEqual(self.history("home"), ["20261029T122317Z.png"])
 
-        self.set_captured_at("home", TAKEN)  # la segunda captura «se tomó» en el mismo segundo
+        self.set_captured_at("home", TAKEN)  # the second capture «was taken» in the same second
         flowmap.update(self.root, "home", self.png("v3.png", shade=20))
         self.assertEqual(self.history("home"), ["20261029T122317Z-2.png", "20261029T122317Z.png"])
         self.assertEqual((self.root / "history/home/20261029T122317Z-2.png").read_bytes(), second)

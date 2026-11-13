@@ -1,7 +1,7 @@
-"""Zonas clicables: deduce dónde se tocó en la pantalla de origen buscando en su árbol el elemento que nombra la acción.
+"""Hotspots: infers where the tap happened on the source screen by finding, in its tree, the element the action names.
 
-Solo sirve con árboles que traen el marco normalizado de cada elemento (`Button "Skip" (x, y, w, h)`, el
-formato del runner de XCUITest). Es una heurística: si no hay una coincidencia única, no asigna nada.
+Only works with trees that carry each element's normalized frame (`Button "Skip" (x, y, w, h)`, the
+XCUITest runner format). It is a heuristic: without a single match, it assigns nothing.
 """
 import re
 from pathlib import Path
@@ -9,12 +9,12 @@ from pathlib import Path
 import flowmap
 
 ELEMENT = re.compile(r"^\s*\w+\s+" + flowmap.QUOTED.pattern + r"\s+\(([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\)")
-MAX_AREA = 0.5  # lo que ocupa media pantalla es un contenedor, no algo que se toque
-MIN_W, MIN_H = 0.08, 0.04  # objetivo táctil mínimo: una línea de texto de 13 px no se puede pulsar en el visor
+MAX_AREA = 0.5  # anything covering half the screen is a container, not something you tap
+MIN_W, MIN_H = 0.08, 0.04  # minimum touch target: a 13 px line of text cannot be clicked in the viewer
 
 
 def _tappable(rect):
-    """Agranda alrededor de su centro lo que sea más pequeño que MIN_W × MIN_H, sin salirse de la pantalla."""
+    """Grows around its center anything smaller than MIN_W × MIN_H, without leaving the screen."""
     grown = dict(rect)
     for pos, size, minimum in (("x", "w", MIN_W), ("y", "h", MIN_H)):
         grown[size] = max(rect[size], minimum)
@@ -34,7 +34,7 @@ def _elements(tree_text):
 
 
 def _locate(tree_text, action):
-    """(rect, None) si un único elemento nombra la acción; (None, motivo) si no hay coincidencia o es ambigua."""
+    """(rect, None) if a single element names the action; (None, reason) if there is no match or it is ambiguous."""
     action = action.lower()
     found = [(label, rect) for label, rect in _elements(tree_text) if re.search(rf"(?<!\w){re.escape(label)}(?!\w)", action)]
     if not found:

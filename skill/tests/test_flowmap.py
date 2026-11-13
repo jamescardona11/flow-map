@@ -1,4 +1,4 @@
-"""Tests del CLI flowmap: esquema del JSON, recaptura con detección de cambios."""
+"""Tests for the flowmap CLI: JSON schema, recapture with change detection."""
 import json
 import struct
 import subprocess
@@ -46,7 +46,7 @@ class FlowMapTest(unittest.TestCase):
         return path
 
     def add(self, screen_id, **kwargs):
-        defaults = dict(title=screen_id.upper(), flow="Entrar", image=self.png(f"{screen_id}.png"))
+        defaults = dict(title=screen_id.upper(), flow="Sign in", image=self.png(f"{screen_id}.png"))
         defaults.update(kwargs)
         return flowmap.add(self.root, screen_id, **defaults)
 
@@ -57,23 +57,23 @@ class FlowMapTest(unittest.TestCase):
 
     def test_init_refuses_to_overwrite_existing_map(self):
         with self.assertRaises(flowmap.FlowMapError):
-            flowmap.init(self.root, title="otra", platform="web")
+            flowmap.init(self.root, title="another", platform="web")
 
     def test_add_first_screen_becomes_entry_and_creates_flow(self):
-        self.add("login", title="Login", flow="Entrar")
+        self.add("login", title="Login", flow="Sign in")
         data = self.data()
         self.assertEqual(data["entry"], "login")
-        self.assertEqual([f["title"] for f in data["flows"]], ["Entrar"])
+        self.assertEqual([f["title"] for f in data["flows"]], ["Sign in"])
         screen = data["screens"][0]
         self.assertEqual((screen["width"], screen["height"]), (40, 80))
         self.assertTrue((self.root / screen["image"]).exists())
 
     def test_add_with_from_creates_edge_and_reuses_flow(self):
         self.add("a")
-        self.add("b", from_id="a", action="tap Continuar")
+        self.add("b", from_id="a", action="tap Continue")
         data = self.data()
         self.assertEqual(len(data["flows"]), 1)
-        self.assertEqual(data["edges"], [{"from": "a", "to": "b", "action": "tap Continuar"}])
+        self.assertEqual(data["edges"], [{"from": "a", "to": "b", "action": "tap Continue"}])
 
     def test_add_rejects_duplicate_id_unknown_parent_and_missing_action(self):
         self.add("a")
@@ -86,7 +86,7 @@ class FlowMapTest(unittest.TestCase):
 
     def test_add_rejects_invalid_id(self):
         with self.assertRaises(flowmap.FlowMapError):
-            self.add("Con Espacios")
+            self.add("With Spaces")
 
     def test_add_reads_jpeg_dimensions_even_with_a_png_extension(self):
         def segment(marker, body):
@@ -124,16 +124,16 @@ class FlowMapTest(unittest.TestCase):
 
     def test_link_adds_edge_between_existing_screens_and_is_idempotent(self):
         self.add("a")
-        self.add("b", from_id="a", action="ir")
-        flowmap.link(self.root, "b", "a", "volver")
-        flowmap.link(self.root, "b", "a", "volver")
+        self.add("b", from_id="a", action="go")
+        flowmap.link(self.root, "b", "a", "back")
+        flowmap.link(self.root, "b", "a", "back")
         self.assertEqual(len(self.data()["edges"]), 2)
 
     def test_frontier_is_resolved_when_the_branch_gets_explored(self):
         self.add("a")
-        flowmap.frontier(self.root, "a", "tap Ajustes")
-        self.assertEqual(self.data()["frontier"], [{"from": "a", "action": "tap Ajustes"}])
-        self.add("b", from_id="a", action="tap Ajustes")
+        flowmap.frontier(self.root, "a", "tap Settings")
+        self.assertEqual(self.data()["frontier"], [{"from": "a", "action": "tap Settings"}])
+        self.add("b", from_id="a", action="tap Settings")
         self.assertEqual(self.data()["frontier"], [])
 
     def test_frontier_is_resolved_by_link(self):
@@ -216,11 +216,11 @@ class FlowMapTest(unittest.TestCase):
         flowmap._save(self.root, data)
         problems = flowmap.check(self.root)
         self.assertTrue(any("ghost" in p for p in problems))
-        self.assertTrue(any("imagen" in p for p in problems))
+        self.assertTrue(any("image" in p for p in problems))
 
     def test_check_passes_on_a_healthy_map(self):
         self.add("a")
-        self.add("b", from_id="a", action="ir")
+        self.add("b", from_id="a", action="go")
         self.assertEqual(flowmap.check(self.root), [])
 
     def test_cli_roundtrip(self):

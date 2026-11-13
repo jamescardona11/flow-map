@@ -1,35 +1,35 @@
-# Capturar pantalla + árbol según la herramienta
+# Capturing screen + tree by tool
 
-`flowmap.py add/update` necesita dos archivos por pantalla: un PNG y, idealmente, el árbol de accesibilidad como texto. Cualquier herramienta sirve mientras entregue ambos como archivos locales. Orden de preferencia: **Playwright** (web) → **agent-device** (móvil) → **argent** (respaldo).
+`flowmap.py add/update` needs two files per screen: a PNG and, ideally, the accessibility tree as text. Any tool works as long as it delivers both as local files. Order of preference: **Playwright** (web) → **agent-device** (mobile) → **argent** (fallback).
 
-Verificado con la CLI/schemas de las herramientas el 2026-10-29; lo marcado "sin probar" no se ejecutó de punta a punta, comprueba en la primera captura que el archivo existe y no está vacío.
+Verified against the tools' CLI/schemas on 2026-10-29; anything marked "untested" was not run end to end, so check on the first capture that the file exists and is not empty.
 
 ## Web: Playwright (`playwright-cli`)
 
 ```
-playwright-cli goto <url-http>                       # file: está bloqueado; sirve el sitio por http
-playwright-cli resize 1440 900                       # fija el viewport: mismas dimensiones en todas las capturas
-playwright-cli screenshot --filename=<dir>/a1.png    # --full-page si la pantalla hace scroll
-playwright-cli snapshot --filename=<dir>/a1.txt      # árbol de accesibilidad (refs incluidos)
-playwright-cli click <ref>                           # refs salen del snapshot
+playwright-cli goto <url-http>                       # file: is blocked; serve the site over http
+playwright-cli resize 1440 900                       # fixes the viewport: same dimensions in every capture
+playwright-cli screenshot --filename=<dir>/a1.png    # --full-page if the screen scrolls
+playwright-cli snapshot --filename=<dir>/a1.txt      # accessibility tree (refs included)
+playwright-cli click <ref>                           # refs come from the snapshot
 ```
 
-Los refs (`e12`) cambian entre snapshots; el normalizador de `flowmap` los trata como números y no cuentan como cambio. Si hay sesión/login, hazlo antes de la primera captura y no lo registres como pantalla salvo que el login sea parte del flujo.
+Refs (`e12`) change between snapshots; `flowmap`'s normalizer treats them as numbers and they do not count as a change. If there is a session/login, do it before the first capture and do not register it as a screen unless the login is part of the flow.
 
-## Móvil: agent-device (MCP)
+## Mobile: agent-device (MCP)
 
-- `screenshot` con `path: <dir>/a1.png` guarda el PNG. Acepta `platform: "web"`, así que también cubre web si Playwright no está.
-- `snapshot` devuelve el árbol como texto en la respuesta y no tiene parámetro de salida: guarda ese texto tú en `<dir>/a1.txt` (Write). Usa `interactiveOnly: true` para exploración, pero para el mapa usa el árbol completo: es la base del diff.
-- Para moverte usa `press`/`click`/`fill`/`back` con `settle: true` (la respuesta ya espera a que la UI se estabilice).
-- Si el árbol viene vacío o con advertencia de AX no disponible, captura igual y registra la pantalla sin `--tree`; la detección de cambios será por píxeles (sin probar con una app real en esta versión del skill).
+- `screenshot` with `path: <dir>/a1.png` saves the PNG. It accepts `platform: "web"`, so it also covers web if Playwright is not available.
+- `snapshot` returns the tree as text in the response and has no output parameter: save that text yourself to `<dir>/a1.txt` (Write). Use `interactiveOnly: true` for exploration, but for the map use the full tree: it is the basis of the diff.
+- To move around use `press`/`click`/`fill`/`back` with `settle: true` (the response already waits for the UI to settle).
+- If the tree comes back empty or with an AX-unavailable warning, capture anyway and register the screen without `--tree`; change detection will be by pixels (untested with a real app in this version of the skill).
 
-## Móvil: argent (respaldo)
+## Mobile: argent (fallback)
 
-- `screenshot` baja por defecto a escala 0.25: pasa `scale: 1.0` o las capturas del mapa saldrán borrosas. Con `includeImageInContext: false` el archivo se escribe igualmente; lee su ruta en el resultado (sin probar dónde la deja en cada plataforma) y pásala a `--image`.
-- `describe` entrega el árbol de accesibilidad como texto; guárdalo en un `.txt` y pásalo a `--tree`.
-- Las herramientas de interacción devuelven la pantalla después de la acción, útil para decidir el siguiente `--action`.
-- Teléfono físico: la captura solo cubre la app registrada con `launch-app`; las pantallas del sistema (permisos) no entran.
+- `screenshot` downscales to 0.25 by default: pass `scale: 1.0` or the map's captures will come out blurry. With `includeImageInContext: false` the file is still written; read its path in the result (untested where it lands on each platform) and pass it to `--image`.
+- `describe` returns the accessibility tree as text; save it to a `.txt` and pass it to `--tree`.
+- The interaction tools return the screen after the action, useful for deciding the next `--action`.
+- Physical phone: the capture only covers the app registered with `launch-app`; system screens (permissions) are not included.
 
-## Nombres de archivo
+## File names
 
-Guarda las capturas crudas en una carpeta temporal y deja que `flowmap.py` las copie a `screens/<id>.png`. No apuntes `--image` a `screens/` salvo para re-registrar la misma imagen con otro árbol (funciona, no copia).
+Keep the raw captures in a temporary folder and let `flowmap.py` copy them to `screens/<id>.png`. Do not point `--image` at `screens/` except to re-register the same image with another tree (it works, it does not copy).

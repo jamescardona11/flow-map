@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Mapa de flujos de una app: crea y mantiene la carpeta del mapa (map.json + capturas).
+"""Flow map of an app: creates and maintains the map folder (map.json + captures).
 
-El agente captura (screenshot + árbol de accesibilidad) con la herramienta que
-corresponda y usa este CLI solo para registrar y actualizar el mapa. El visor
-vive en la app Flow Map (comando `flow-map`), que abre esta carpeta.
-Una pantalla puede llevar además una maqueta HTML autocontenida (`add --html`, `html`):
-la app la muestra en un iframe aislado junto a la captura.
-Esquema y comandos: references/schema.md
+The agent captures (screenshot + accessibility tree) with whichever tool fits and
+uses this CLI only to register and update the map. The viewer lives in the Flow Map
+app (the `flow-map` command), which opens this folder.
+A screen can also carry a self-contained HTML mock (`add --html`, `html`):
+the app shows it in an isolated iframe next to the capture.
+Schema and commands: references/schema.md
 """
 import argparse
 import hashlib
@@ -25,7 +25,7 @@ from pathlib import Path
 PALETTE = ["#5aa9e6", "#3aa58b", "#e0a63a", "#b583e6", "#e5736a", "#79bdb3"]
 ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 MAX_DIFF_LINES = 12
-THUMB_PX = 560  # alto de las miniaturas: el doble de lo que el mapa dibuja, para pantallas de alta densidad
+THUMB_PX = 560  # thumbnail height: twice what the map draws, for high-density screens
 QUOTED = re.compile(r'"((?:[^"\\]|\\.)*)"')
 MAX_HTML_BYTES = 5 * 1024 * 1024
 HTML_EXTENSIONS = (".html", ".htm")
@@ -40,7 +40,7 @@ class FlowMapError(Exception):
 
 
 def _css_urls(text):
-    """Las referencias `url(...)` de un CSS, en una sola pasada; un `url(` sin cerrar es un error, no se ignora."""
+    """The `url(...)` references of a CSS text, in a single pass; an unclosed `url(` is an error, not ignored."""
     urls, pos = [], 0
     while opened := CSS_URL_OPEN.search(text, pos):
         start = opened.end()
@@ -48,7 +48,7 @@ def _css_urls(text):
         end = text.find(quote, start + 1) if quote else start
         close = text.find(")", end) if end != -1 else -1
         if close == -1:
-            raise FlowMapError("el CSS está mal formado: hay un url( sin cerrar")
+            raise FlowMapError("the CSS is malformed: there is an unclosed url(")
         urls.append(text[start + len(quote):end].strip() if quote else text[start:close].strip())
         pos = close + 1
     return urls
@@ -61,7 +61,7 @@ def _now():
 def _load(root):
     path = Path(root) / "map.json"
     if not path.exists():
-        raise FlowMapError(f"No existe {path}; corre `init` primero")
+        raise FlowMapError(f"{path} does not exist; run `init` first")
     return json.loads(path.read_text())
 
 
@@ -77,19 +77,19 @@ def _screen(data, screen_id):
     for screen in data["screens"]:
         if screen["id"] == screen_id:
             return screen
-    raise FlowMapError(f"No existe la pantalla '{screen_id}'")
+    raise FlowMapError(f"There is no screen '{screen_id}'")
 
 
 def _slug(text):
     ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-") or "flujo"
+    return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-") or "flow"
 
 
 JPEG_SOF = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
 
 
 def _image_size(image):
-    """(ancho, alto) de un PNG o JPEG según su contenido, no su extensión; (None, None) si es otro formato."""
+    """(width, height) of a PNG or JPEG by its content, not its extension; (None, None) for any other format."""
     with open(image, "rb") as f:
         header = f.read(24)
         if header[:8] == b"\x89PNG\r\n\x1a\n":
@@ -108,8 +108,8 @@ def _image_size(image):
 
 
 def _tree_tokens(text):
-    # Los dígitos cambian con datos dinámicos (horas, contadores, frames) y no cuentan como cambio de pantalla.
-    # Las series de números (coordenadas, frames) se colapsan en un solo '#' para que el diff sea legible.
+    # Digits change with dynamic data (times, counters, frames) and do not count as a screen change.
+    # Runs of numbers (coordinates, frames) collapse into a single '#' so the diff stays readable.
     def normalize(line):
         line = re.sub(r"\d+(?:\.\d+)?", "#", line)
         return re.sub(r"\s+", " ", re.sub(r"#(?:[ ,]*#)+", "#", line)).strip().lower()
@@ -135,7 +135,7 @@ def _fingerprint(tokens, image):
 
 
 def _make_thumb(root, name, source):
-    """JPEG de THUMB_PX de alto para el mapa. None si la imagen ya es pequeña o no hay `sips` (macOS)."""
+    """JPEG THUMB_PX tall for the map. None if the image is already small or `sips` (macOS) is missing."""
     thumb = root / "thumbs" / f"{name}.jpg"
     thumb.unlink(missing_ok=True)
     height = _image_size(source)[1]
@@ -148,7 +148,7 @@ def _make_thumb(root, name, source):
 
 
 def thumbs(root):
-    """Genera las miniaturas que falten; devuelve cuántas creó."""
+    """Creates the missing thumbnails; returns how many it made."""
     root = Path(root)
     data = _load(root)
     made = 0
@@ -165,12 +165,12 @@ def thumbs(root):
 
 
 def _store_baseline(root, screen_id, image):
-    """Copia la imagen de «antes» a baselines/ y devuelve sus campos (`baseline`, y `baselineThumb` si es alta).
+    """Copies the «before» image to baselines/ and returns its fields (`baseline`, and `baselineThumb` if it is tall).
 
-    Es la app de hoy frente a un rediseño, no una recaptura aceptada."""
+    It is today's app against a redesign, not an accepted recapture."""
     root, image = Path(root), Path(image)
     if not image.exists():
-        raise FlowMapError(f"No existe la imagen {image}")
+        raise FlowMapError(f"Image {image} does not exist")
     target = root / "baselines" / f"{screen_id}{image.suffix.lower()}"
     target.parent.mkdir(exist_ok=True)
     if image.resolve() != target.resolve():
@@ -183,13 +183,13 @@ def _store_baseline(root, screen_id, image):
 
 
 def _external(url):
-    """True si la referencia carga algo que no va dentro del archivo (no es `data:`, ni vacía, ni un fragmento)."""
+    """True if the reference loads something that is not inside the file (not `data:`, not empty, not a fragment)."""
     url = (url or "").strip()
     return not (url == "" or url.startswith("#") or url.lower().startswith("data:"))
 
 
 class _ExternalRefs(HTMLParser):
-    """Recoge lo que una maqueta HTML cargaría de fuera: la app la sirve sin red ni archivos vecinos."""
+    """Collects what an HTML mock would load from outside: the app serves it with no network and no neighbouring files."""
 
     def __init__(self):
         super().__init__()
@@ -225,23 +225,23 @@ class _ExternalRefs(HTMLParser):
 
 
 def _check_html(file):
-    """Valida la maqueta antes de copiar nada; lanza FlowMapError si no es un .html autocontenido."""
+    """Validates the mock before copying anything; raises FlowMapError if it is not a self-contained .html."""
     file = Path(file)
     if not file.exists():
-        raise FlowMapError(f"No existe el HTML {file}")
+        raise FlowMapError(f"HTML {file} does not exist")
     if file.suffix.lower() not in HTML_EXTENSIONS:
-        raise FlowMapError(f"{file} no es un archivo .html")
+        raise FlowMapError(f"{file} is not an .html file")
     if file.stat().st_size > MAX_HTML_BYTES:
-        raise FlowMapError(f"{file} pesa más de {MAX_HTML_BYTES // 1024 // 1024} MB")
+        raise FlowMapError(f"{file} is larger than {MAX_HTML_BYTES // 1024 // 1024} MB")
     parser = _ExternalRefs()
     parser.feed(file.read_text(errors="replace"))
     parser.close()
     if parser.found:
-        raise FlowMapError(f"el HTML no es autocontenido: carga {parser.found[0]!r} (usa CSS/JS en línea e imágenes y fuentes data:)")
+        raise FlowMapError(f"the HTML is not self-contained: it loads {parser.found[0]!r} (use inline CSS/JS and data: images and fonts)")
 
 
 def _store_html(root, screen_id, file):
-    """Copia la maqueta (ya validada con `_check_html`) a screens-src/ y devuelve su ruta relativa (el campo `html` de la pantalla)."""
+    """Copies the mock (already validated with `_check_html`) to screens-src/ and returns its relative path (the screen's `html` field)."""
     root, file = Path(root), Path(file)
     target = root / "screens-src" / f"{screen_id}.html"
     target.parent.mkdir(exist_ok=True)
@@ -251,11 +251,11 @@ def _store_html(root, screen_id, file):
 
 
 def _store_capture(root, screen_id, image, tree, captured_at=None):
-    """Copia imagen y árbol al mapa; devuelve los campos de la pantalla y los tokens del árbol nuevo."""
+    """Copies image and tree into the map; returns the screen fields and the new tree's tokens."""
     root = Path(root)
     image = Path(image)
     if not image.exists():
-        raise FlowMapError(f"No existe la imagen {image}")
+        raise FlowMapError(f"Image {image} does not exist")
     target = root / "screens" / f"{screen_id}{image.suffix.lower()}"
     if image.resolve() != target.resolve():
         shutil.copy2(image, target)
@@ -264,7 +264,7 @@ def _store_capture(root, screen_id, image, tree, captured_at=None):
         tree_text = Path(tree).read_text()
         tree_path.write_text(tree_text)
     else:
-        tree_path.unlink(missing_ok=True)  # el árbol anterior ya no describe esta captura
+        tree_path.unlink(missing_ok=True)  # the previous tree no longer describes this capture
         tree_text = ""
     tokens = _tree_tokens(tree_text)
     kind, fingerprint = _fingerprint(tokens, target)
@@ -284,7 +284,7 @@ def _store_capture(root, screen_id, image, tree, captured_at=None):
 
 
 def valid_rect(rect):
-    """Rectángulo normalizado {x, y, w, h} dentro de la pantalla; lo reutilizan las aristas y las anotaciones."""
+    """Normalized rectangle {x, y, w, h} inside the screen; reused by edges and annotations."""
     try:
         x, y, w, h = (float(rect[k]) for k in ("x", "y", "w", "h"))
     except (KeyError, TypeError, ValueError):
@@ -295,7 +295,7 @@ def valid_rect(rect):
 
 
 def _add_edge(data, from_id, to_id, action, at=None):
-    """Registra la arista (sin duplicarla; un `at` nuevo reemplaza al anterior) y cierra la rama pendiente."""
+    """Registers the edge (without duplicating it; a new `at` replaces the old one) and closes the pending branch."""
     at = valid_rect(at) if at else None
     edge = next((e for e in data["edges"] if (e["from"], e["to"], e["action"]) == (from_id, to_id, action)), None)
     if edge is None:
@@ -309,7 +309,7 @@ def _add_edge(data, from_id, to_id, action, at=None):
 def init(root, title, platform, meta=None):
     root = Path(root)
     if (root / "map.json").exists():
-        raise FlowMapError(f"{root / 'map.json'} ya existe")
+        raise FlowMapError(f"{root / 'map.json'} already exists")
     (root / "screens").mkdir(parents=True, exist_ok=True)
     (root / "trees").mkdir(exist_ok=True)
     data = dict(version=1, title=title, platform=platform, entry=None, flows=[], screens=[], edges=[], frontier=[])
@@ -320,22 +320,22 @@ def init(root, title, platform, meta=None):
 
 def add(root, screen_id, title, flow, image, tree=None, description="", from_id=None, action=None, captured_at=None, meta=None, at=None, before=None, html=None):
     if not ID_PATTERN.match(screen_id):
-        raise FlowMapError(f"Id inválido '{screen_id}': usa minúsculas, dígitos y guiones")
+        raise FlowMapError(f"Invalid id '{screen_id}': use lowercase letters, digits and hyphens")
     data = _load(root)
     if any(s["id"] == screen_id for s in data["screens"]):
-        raise FlowMapError(f"La pantalla '{screen_id}' ya existe; usa `update` para recapturarla")
+        raise FlowMapError(f"Screen '{screen_id}' already exists; use `update` to recapture it")
     if from_id:
         _screen(data, from_id)
         if not action:
-            raise FlowMapError("--action es obligatorio junto a --from")
+            raise FlowMapError("--action is required with --from")
 
     flow_id = _slug(flow)
     if not any(f["id"] == flow_id for f in data["flows"]):
         data["flows"].append(dict(id=flow_id, title=flow, color=PALETTE[len(data["flows"]) % len(PALETTE)]))
 
     screen = dict(id=screen_id, title=title, flow=flow_id, description=description, status="ok")
-    if before and not Path(before).exists():  # antes de copiar nada: un fallo no deja una pantalla a medias
-        raise FlowMapError(f"No existe la imagen {before}")
+    if before and not Path(before).exists():  # before copying anything: a failure must not leave a half-added screen
+        raise FlowMapError(f"Image {before} does not exist")
     if html:
         _check_html(html)
     fields, _ = _store_capture(root, screen_id, image, tree, captured_at)
@@ -354,16 +354,16 @@ def add(root, screen_id, title, flow, image, tree=None, description="", from_id=
 
 
 def set_baseline(root, screen_id, image):
-    """Añade o reemplaza el «antes» de una pantalla. `update` y `ack` no lo tocan."""
+    """Adds or replaces the «before» of a screen. `update` and `ack` leave it alone."""
     data = _load(root)
     screen = _screen(data, screen_id)
-    screen.pop("baselineThumb", None)  # una miniatura vieja no describe el «antes» nuevo
+    screen.pop("baselineThumb", None)  # an old thumbnail does not describe the new «before»
     screen.update(_store_baseline(root, screen_id, image))
     _save(root, data)
 
 
 def set_html(root, screen_id, file):
-    """Añade o reemplaza la maqueta HTML de una pantalla. `update` y `ack` no la tocan."""
+    """Adds or replaces the HTML mock of a screen. `update` and `ack` leave it alone."""
     data = _load(root)
     screen = _screen(data, screen_id)
     _check_html(file)
@@ -383,7 +383,7 @@ def set_flow_hidden(root, flow_id, hidden):
     data = _load(root)
     flow = next((f for f in data["flows"] if f["id"] == flow_id), None)
     if flow is None:
-        raise FlowMapError(f"No existe el flujo '{flow_id}'")
+        raise FlowMapError(f"There is no flow '{flow_id}'")
     if hidden:
         flow["hidden"] = True
     else:
@@ -402,10 +402,10 @@ def frontier(root, from_id, action):
 
 
 def _history_name(root, screen_id, old_image, captured_at):
-    """Ruta libre en history/<id>/ para la captura que se va a reemplazar: <YYYYMMDDTHHMMSSZ>[-N].<ext>.
+    """Free path in history/<id>/ for the capture about to be replaced: <YYYYMMDDTHHMMSSZ>[-N].<ext>.
 
-    La hora es la de esa captura en UTC (una fecha sin zona cuenta como UTC); si `capturedAt` falta o no se
-    entiende, la fecha de modificación del archivo."""
+    The time is that capture's time in UTC (a date without a zone counts as UTC); if `capturedAt` is missing or
+    unparseable, the file's modification time."""
     old_path = Path(root) / old_image
     try:
         taken = datetime.fromisoformat(captured_at)
@@ -423,15 +423,15 @@ def _history_name(root, screen_id, old_image, captured_at):
 
 
 def update(root, screen_id, image, tree=None):
-    """Recaptura una pantalla; marca `changed` si su huella cambió y guarda qué cambió."""
+    """Recaptures a screen; marks it `changed` if its fingerprint changed and records what changed."""
     root = Path(root)
     data = _load(root)
     screen = _screen(data, screen_id)
     old_tree_path = _tree_path(root, screen_id)
-    old_tree_text = old_tree_path.read_text() if old_tree_path.exists() else None  # antes de que _store_capture lo reemplace
+    old_tree_text = old_tree_path.read_text() if old_tree_path.exists() else None  # before _store_capture replaces it
     old_image = screen["image"]
-    old_bytes = (root / old_image).read_bytes()  # el mapa puede sobrescribir este archivo al guardar la captura nueva
-    history_file = _history_name(root, screen_id, old_image, screen.get("capturedAt"))  # la fecha del archivo también se pierde al reemplazarlo
+    old_bytes = (root / old_image).read_bytes()  # the map may overwrite this file when it stores the new capture
+    history_file = _history_name(root, screen_id, old_image, screen.get("capturedAt"))  # the file's date is also lost when it is replaced
 
     fields, new_tokens = _store_capture(root, screen_id, image, tree)
     if fields["image"] != old_image:
@@ -443,8 +443,8 @@ def update(root, screen_id, image, tree=None):
     result = dict(id=screen_id, changed=changed)
     if changed:
         history_file.parent.mkdir(parents=True, exist_ok=True)
-        history_file.write_bytes(old_bytes)  # una por captura reemplazada; el CLI nunca las borra
-        if "previous" not in screen:  # el «antes» es lo último aceptado: no se pisa hasta hacer `ack`
+        history_file.write_bytes(old_bytes)  # one per replaced capture; the CLI never deletes them
+        if "previous" not in screen:  # the «before» is the last accepted one: it is not overwritten until `ack`
             previous = root / "history" / f"{screen_id}{Path(old_image).suffix}"
             previous.parent.mkdir(exist_ok=True)
             previous.write_bytes(old_bytes)
@@ -474,33 +474,33 @@ def check(root):
     data = _load(root)
     ids = [s["id"] for s in data["screens"]]
     flows = {f["id"] for f in data["flows"]}
-    problems = [f"id duplicado '{i}'" for i, n in sorted(Counter(ids).items()) if n > 1]
+    problems = [f"duplicate id '{i}'" for i, n in sorted(Counter(ids).items()) if n > 1]
     for s in data["screens"]:
         if s["flow"] not in flows:
-            problems.append(f"la pantalla '{s['id']}' usa el flujo inexistente '{s['flow']}'")
+            problems.append(f"screen '{s['id']}' uses the nonexistent flow '{s['flow']}'")
         if not (root / s["image"]).exists():
-            problems.append(f"falta la imagen de '{s['id']}': {s['image']}")
+            problems.append(f"missing image of '{s['id']}': {s['image']}")
         if s.get("thumb") and not (root / s["thumb"]).exists():
-            problems.append(f"falta la miniatura de '{s['id']}': {s['thumb']}")
+            problems.append(f"missing thumbnail of '{s['id']}': {s['thumb']}")
         for field in ("previous", "baseline", "baselineThumb"):
             if s.get(field) and not (root / s[field]).exists():
-                problems.append(f"falta el «antes» de '{s['id']}': {s[field]}")
+                problems.append(f"missing «before» of '{s['id']}': {s[field]}")
         if "html" in s:
             html = s["html"]
             parts = html.split("/") if isinstance(html, str) else []
             if not (parts and parts[0] == "screens-src" and html.endswith(".html") and ".." not in parts):
-                problems.append(f"el HTML de '{s['id']}' no es una ruta dentro de screens-src/ que termine en .html: {html!r}")
+                problems.append(f"the HTML of '{s['id']}' is not a path inside screens-src/ ending in .html: {html!r}")
             elif not (root / html).exists():
-                problems.append(f"falta el HTML de '{s['id']}': {html}")
+                problems.append(f"missing HTML of '{s['id']}': {html}")
     for e in data["edges"]:
         for end in ("from", "to"):
             if e[end] not in ids:
-                problems.append(f"arista '{e['action']}' apunta a '{e[end]}', que no existe")
+                problems.append(f"edge '{e['action']}' points to '{e[end]}', which does not exist")
     for f in data["frontier"]:
         if f["from"] not in ids:
-            problems.append(f"rama sin explorar '{f['action']}' sale de '{f['from']}', que no existe")
+            problems.append(f"unexplored branch '{f['action']}' leaves '{f['from']}', which does not exist")
     if data["entry"] not in ids and ids:
-        problems.append(f"entry '{data['entry']}' no existe")
+        problems.append(f"entry '{data['entry']}' does not exist")
     return problems
 
 
@@ -510,9 +510,9 @@ def status(root):
     for s in data["screens"]:
         if s["status"] == "changed":
             sim = s["lastChange"]["similarity"]
-            lines.append(f"CAMBIÓ  {s['id']}  {s['title']}  (similitud {sim if sim is not None else 'n/d'})")
+            lines.append(f"CHANGED  {s['id']}  {s['title']}  (similarity {sim if sim is not None else 'n/a'})")
     for f in data["frontier"]:
-        lines.append(f"SIN EXPLORAR  {f['from']} → {f['action']}")
+        lines.append(f"UNEXPLORED  {f['from']} → {f['action']}")
     return lines
 
 
@@ -523,7 +523,7 @@ def _parse_at(text):
     try:
         x, y, w, h = (float(part) for part in text.split(","))
     except ValueError:
-        raise argparse.ArgumentTypeError("usa cuatro números separados por comas: x,y,w,h") from None
+        raise argparse.ArgumentTypeError("use four numbers separated by commas: x,y,w,h") from None
     return dict(x=x, y=y, w=w, h=h)
 
 
@@ -533,20 +533,20 @@ def _parser():
 
     def command(name, *args):
         p = sub.add_parser(name)
-        p.add_argument("root", help="carpeta del mapa (contiene map.json)")
+        p.add_argument("root", help="map folder (contains map.json)")
         for flags, kwargs in args:
             p.add_argument(*flags, **kwargs)
         return p
 
     required = dict(required=True)
-    at = (["--at"], dict(type=_parse_at, help="zona tocada en la pantalla de origen, normalizada: x,y,w,h"))
+    at = (["--at"], dict(type=_parse_at, help="area tapped on the source screen, normalized: x,y,w,h"))
     command("init", (["--title"], required), (["--platform"], dict(default="web", choices=["web", "ios", "android"])))
     command(
         "add",
         (["--id"], required), (["--title"], required), (["--flow"], required), (["--image"], required),
         (["--tree"], {}), (["--description"], dict(default="")), (["--from"], dict(dest="from_id")), (["--action"], {}),
-        (["--captured-at"], {}), (["--before"], dict(help="imagen de «antes» (la app de hoy) para comparar con --image")), at,
-        (["--html"], dict(help="maqueta HTML autocontenida de la pantalla (CSS/JS en línea, imágenes data:)")),
+        (["--captured-at"], {}), (["--before"], dict(help="«before» image (today's app) to compare with --image")), at,
+        (["--html"], dict(help="self-contained HTML mock of the screen (inline CSS/JS, data: images)")),
     )
     command("baseline", (["--id"], required), (["--image"], required))
     command("html", (["--id"], required), (["--file"], required))
@@ -560,9 +560,9 @@ def _parser():
     command("flow", (["--id"], required), (["--hide"], dict(action="store_true")), (["--show"], dict(action="store_true")))
     command("hotspots", (["--overwrite"], dict(action="store_true")))
     command("annotations")
-    for retired in RETIRED_COMMANDS:  # siguen registrados para explicar adónde se fue el visor, no para ejecutarse
+    for retired in RETIRED_COMMANDS:  # still registered to explain where the viewer went, not to run
         retired_parser = command(retired)
-        if retired == "bundle":  # las opciones de antes se aceptan para que el aviso salga igual
+        if retired == "bundle":  # the old options are accepted so the notice still prints
             retired_parser.add_argument("--out")
             retired_parser.add_argument("--thumbs-only", action="store_true")
         if retired == "serve":
@@ -572,10 +572,10 @@ def _parser():
 
 def main(argv=None):
     args = _parser().parse_args(argv)
-    import annotations, hotspots  # importan flowmap: se cargan aquí y no arriba para evitar el ciclo
+    import annotations, hotspots  # they import flowmap: loaded here, not at the top, to avoid the cycle
 
     if args.command in RETIRED_COMMANDS:
-        print(f"error: el visor ahora vive en la app Flow Map; abre {args.root} con: flow-map open {args.root}", file=sys.stderr)
+        print(f"error: the viewer now lives in the Flow Map app; open {args.root} with: flow-map open {args.root}", file=sys.stderr)
         return 1
     try:
         if args.command == "init":
@@ -599,16 +599,16 @@ def main(argv=None):
             print("\n".join(problems) or "ok")
             return 1 if problems else 0
         elif args.command == "status":
-            print("\n".join(status(args.root)) or "sin cambios ni ramas pendientes")
+            print("\n".join(status(args.root)) or "no changes or pending branches")
         elif args.command == "thumbs":
-            print(f"{thumbs(args.root)} miniaturas creadas")
+            print(f"{thumbs(args.root)} thumbnails created")
         elif args.command == "flow":
             if args.hide == args.show:
-                raise FlowMapError("usa --hide o --show")
+                raise FlowMapError("use --hide or --show")
             set_flow_hidden(args.root, args.id, args.hide)
         elif args.command == "hotspots":
             result = hotspots.autodetect(args.root, args.overwrite)
-            print(f"{result['applied']} zonas asignadas; omitidas: {json.dumps(result['skipped'], ensure_ascii=False)}")
+            print(f"{result['applied']} hotspots assigned; skipped: {json.dumps(result['skipped'], ensure_ascii=False)}")
         elif args.command == "annotations":
             print(annotations.export(args.root), end="")
     except FlowMapError as error:
@@ -618,6 +618,6 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    import flowmap  # una sola instancia del módulo: los demás lanzan el FlowMapError de `flowmap`, no el de `__main__`
+    import flowmap  # a single module instance: the others raise `flowmap`'s FlowMapError, not `__main__`'s
 
     sys.exit(flowmap.main())

@@ -1,29 +1,29 @@
 # Flow Map
 
-Una aplicación para ver y ordenar mapas de pantallas y pedirle cambios a Claude Code. El vocabulario de abajo es el de la app y el del skill `/flow-map`.
+An app to view and arrange screen maps and to ask Claude Code for changes. The vocabulary below is the one used by the app and by the `/flow-map` skill.
 
 ## Language
 
-**Mapa**:
-El conjunto de pantallas de una app y las flechas que dicen cómo se pasa de una a otra, con las notas y la disposición que la persona le dio.
-_Avoid_: Diagrama, flujo (un flujo es solo una fila del mapa)
+**Map**:
+The set of screens of an app and the arrows saying how to get from one to another, with the notes and layout the person gave it.
+_Avoid_: Diagram, flow (a flow is only one row of the map)
 
-**Carpeta del mapa**:
-La carpeta que contiene todo un mapa y es lo único que comparten la app y el skill.
-_Avoid_: Proyecto, archivo de configuración
+**Map folder**:
+The folder holding a whole map; it is the only thing the app and the skill share.
+_Avoid_: Project, config file
 
-**Pantalla**:
-Un estado estable de la app que la persona distingue de otro, con su captura o su diseño.
-_Avoid_: Vista, nodo (nodo es solo cómo se dibuja)
+**Screen**:
+A stable state of the app that a person tells apart from another, with its capture or its design.
+_Avoid_: View, node (a node is only how it is drawn)
 
-**Petición**:
-Lo que la persona le pide a Claude desde la app: un cambio en el mapa o una pantalla nueva.
-_Avoid_: Prompt, comando
+**Request**:
+What the person asks Claude for from the app: a change to the map or a new screen.
+_Avoid_: Prompt, command
 
-**Sesión ligada**:
-La sesión de Claude Code abierta que se eligió para atender las peticiones de un mapa. Cada mapa tiene a lo sumo una.
-_Avoid_: Conexión, chat
+**Linked session**:
+The open Claude Code session chosen to handle the requests of a map. Each map has at most one.
+_Avoid_: Connection, chat
 
-**Claude propio**:
-Un Claude Code que la app lanza por su cuenta para atender peticiones cuando no hay sesión ligada abierta.
-_Avoid_: Bot, agente de fondo
+**Own Claude**:
+A Claude Code the app launches by itself to handle requests when no linked session is open (called the worker in the code).
+_Avoid_: Bot, background agent

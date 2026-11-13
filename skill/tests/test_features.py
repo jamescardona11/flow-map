@@ -1,4 +1,4 @@
-"""Tests de miniaturas, flujos ocultos, antes/después, zonas clicables y comandos retirados."""
+"""Tests for thumbnails, hidden flows, before/after, hotspots and retired commands."""
 import json
 import shutil
 import subprocess
@@ -49,21 +49,21 @@ class FeatureTest(unittest.TestCase):
     def data(self):
         return json.loads((self.root / "map.json").read_text())
 
-    # --- miniaturas -------------------------------------------------------
+    # --- thumbnails -------------------------------------------------------
 
-    @unittest.skipUnless(HAS_SIPS, "necesita sips (macOS)")
+    @unittest.skipUnless(HAS_SIPS, "needs sips (macOS)")
     def test_add_makes_a_small_jpeg_thumbnail_for_tall_images(self):
         self.add("a", image=self.png("big.png", width=640, height=1400))
         screen = self.data()["screens"][0]
         self.assertEqual(screen["thumb"], "thumbs/a.jpg")
         self.assertEqual(flowmap._image_size(self.root / screen["thumb"])[1], flowmap.THUMB_PX)
 
-    @unittest.skipUnless(HAS_SIPS, "necesita sips (macOS)")
+    @unittest.skipUnless(HAS_SIPS, "needs sips (macOS)")
     def test_images_already_small_get_no_thumbnail(self):
         self.add("a", image=self.png("small.png", width=40, height=80))
         self.assertNotIn("thumb", self.data()["screens"][0])
 
-    @unittest.skipUnless(HAS_SIPS, "necesita sips (macOS)")
+    @unittest.skipUnless(HAS_SIPS, "needs sips (macOS)")
     def test_thumbs_command_backfills_and_check_flags_a_missing_thumb(self):
         self.add("a", image=self.png("big.png", width=640, height=1400))
         data = self.data()
@@ -73,9 +73,9 @@ class FeatureTest(unittest.TestCase):
         self.assertEqual(flowmap.thumbs(self.root), 1)
         self.assertTrue((self.root / "thumbs" / "a.jpg").exists())
         (self.root / "thumbs" / "a.jpg").unlink()
-        self.assertTrue(any("miniatura" in p for p in flowmap.check(self.root)))
+        self.assertTrue(any("thumbnail" in p for p in flowmap.check(self.root)))
 
-    # --- flujos ocultos ---------------------------------------------------
+    # --- hidden flows ---------------------------------------------------
 
     def test_flows_can_be_hidden_and_shown(self):
         self.add("a")
@@ -86,7 +86,7 @@ class FeatureTest(unittest.TestCase):
         with self.assertRaises(flowmap.FlowMapError):
             flowmap.set_flow_hidden(self.root, "ghost", True)
 
-    # --- antes / después --------------------------------------------------
+    # --- before / after --------------------------------------------------
 
     def test_update_keeps_the_image_from_before_the_first_unacknowledged_change(self):
         original = self.png("a1.png", shade=10)
@@ -108,7 +108,7 @@ class FeatureTest(unittest.TestCase):
         self.assertNotIn("previous", self.data()["screens"][0])
         self.assertFalse((self.root / previous).exists())
 
-    # --- zonas clicables (aristas con `at`) -------------------------------
+    # --- hotspots (edges with `at`) -------------------------------
 
     def test_edges_can_carry_the_tapped_area(self):
         self.add("a")
@@ -134,14 +134,14 @@ class FeatureTest(unittest.TestCase):
 
     def test_hotspots_finds_the_element_named_in_the_action(self):
         self.add("a", tree=self.tree(TREE))
-        self.add("b", from_id="a", action="Pulsar Skip")
+        self.add("b", from_id="a", action="Tap Skip")
         result = hotspots.autodetect(self.root)
         self.assertEqual(result["applied"], 1)
         self.assertEqual(self.data()["edges"][0]["at"], {"x": 0.8, "y": 0.05, "w": 0.15, "h": 0.04})
 
     def test_hotspots_grows_tiny_elements_to_a_tappable_size_around_their_center(self):
         self.add("a", tree=self.tree('ROOT  Application (0, 0, 1, 1)\n  AXImage "Chikorita 046"  (0.545, 0.698, 0.212, 0.015)\n'))
-        self.add("b", from_id="a", action="Abrir Chikorita 046")
+        self.add("b", from_id="a", action="Open Chikorita 046")
         hotspots.autodetect(self.root)
         at = self.data()["edges"][0]["at"]
         self.assertGreaterEqual(at["h"], hotspots.MIN_H)
@@ -150,17 +150,17 @@ class FeatureTest(unittest.TestCase):
 
     def test_hotspots_prefers_the_exact_button_over_a_longer_text(self):
         self.add("a", tree=self.tree(TREE))
-        self.add("b", from_id="a", action="Buscar Search")
+        self.add("b", from_id="a", action="Tap Search")
         hotspots.autodetect(self.root)
         self.assertEqual(self.data()["edges"][0]["at"]["y"], 0.9)
 
     def test_hotspots_skips_ambiguous_missing_and_existing(self):
         ambiguous = TREE + '  Button "Skip"  (0.1, 0.1, 0.1, 0.1)\n'
         self.add("a", tree=self.tree(ambiguous))
-        self.add("b", from_id="a", action="Pulsar Skip")
+        self.add("b", from_id="a", action="Tap Skip")
         self.add("c")
-        self.add("d", from_id="c", action="Pulsar Skip")  # c no tiene árbol
-        flowmap.link(self.root, "a", "d", "Pulsar Search", at={"x": 0.5, "y": 0.5, "w": 0.1, "h": 0.1})
+        self.add("d", from_id="c", action="Tap Skip")  # c has no tree
+        flowmap.link(self.root, "a", "d", "Tap Search", at={"x": 0.5, "y": 0.5, "w": 0.1, "h": 0.1})
         result = hotspots.autodetect(self.root)
         self.assertEqual(result["applied"], 0)
         self.assertEqual(result["skipped"], {"ambiguous": 1, "no match": 0, "no tree": 1, "already set": 1})
@@ -169,7 +169,7 @@ class FeatureTest(unittest.TestCase):
         self.add("a", tree=self.tree("Button A\n"))
         flowmap.update(self.root, "a", self.png("a2.png", shade=50), tree=self.tree("Button B\n"))
         (self.root / self.data()["screens"][0]["previous"]).unlink()
-        self.assertTrue(any("antes" in p for p in flowmap.check(self.root)))
+        self.assertTrue(any("before" in p for p in flowmap.check(self.root)))
 
     def test_cli_reports_errors_from_every_command_without_a_traceback(self):
         for command in ("hotspots", "annotations", "thumbs"):

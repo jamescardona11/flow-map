@@ -1,4 +1,4 @@
-"""Tests del export de anotaciones: la app Flow Map escribe <mapa>/temp/annotations.json y `annotations` lo convierte en texto para Claude."""
+"""Tests for the annotations export: the Flow Map app writes <map>/temp/annotations.json and `annotations` turns it into text for Claude."""
 import json
 import subprocess
 import sys
@@ -30,8 +30,8 @@ class AnnotationsTest(unittest.TestCase):
             )
         self.crop = make_png(base / "crop.png", width=10, height=10).read_bytes()
 
-    def add(self, screen="detail", comment="el botón se ve cortado", root=None, rect=RECT):
-        """Escribe temp/annotations.json y el recorte tal como lo hace la app Flow Map."""
+    def add(self, screen="detail", comment="the button looks cut off", root=None, rect=RECT):
+        """Writes temp/annotations.json and the crop the way the Flow Map app does."""
         root = root or self.root
         (root / "temp").mkdir(exist_ok=True)
         path = root / "temp" / "annotations.json"
@@ -49,26 +49,26 @@ class AnnotationsTest(unittest.TestCase):
         return ann
 
     def test_export_gives_claude_everything_needed_to_find_the_spot(self):
-        self.add(screen="edit", comment="falta el título")
+        self.add(screen="edit", comment="the title is missing")
         text = annotations.export(self.root)
-        self.assertIn("falta el título", text)
+        self.assertIn("the title is missing", text)
         self.assertIn("Edit (edit)", text)
         self.assertIn("flow Main", text)
         self.assertIn("Home → [tap detail] → Detail → [tap edit] → Edit", text)
         self.assertIn(str((self.root / "temp" / "edit-01.png").resolve()), text)
         self.assertIn(str((self.root / "screens" / "edit.png").resolve()), text)
-        self.assertIn("10%", text)  # x del recuadro
+        self.assertIn("10%", text)  # x of the box
 
     def test_export_describes_a_whole_screen_annotation_as_the_full_area(self):
         self.add(rect={"x": 0, "y": 0, "w": 1, "h": 1})
         self.assertIn("area x 0%, y 0%, width 100%, height 100%", annotations.export(self.root))
 
     def test_export_can_select_ids_and_is_explicit_when_empty(self):
-        self.add(comment="uno")
-        second = self.add(comment="dos")
+        self.add(comment="first note")
+        second = self.add(comment="second note")
         text = annotations.export(self.root, [second["id"]])
-        self.assertIn("dos", text)
-        self.assertNotIn("uno", text)
+        self.assertIn("second note", text)
+        self.assertNotIn("first note", text)
         self.assertIn("No annotations", annotations.export(self.root, ["nope"]))
 
     def test_export_warns_when_the_screen_was_recaptured_after_annotating(self):
@@ -77,15 +77,15 @@ class AnnotationsTest(unittest.TestCase):
         self.assertIn("recaptured", annotations.export(self.root))
 
     def test_export_opens_with_an_instruction_so_the_text_works_as_a_prompt(self):
-        self.add(comment="mover el botón")
+        self.add(comment="move the button")
         text = annotations.export(self.root)
         self.assertTrue(text.startswith("The user marked areas"), text[:80])
         first = text.splitlines()[0]
         self.assertIn("Read", first)
-        self.assertIn("references, not code to edit", first)  # capturas de otra app no se «aplican»
+        self.assertIn("references, not code to edit", first)  # screenshots of another app are not «applied»
 
     def test_export_survives_losing_its_line_breaks(self):
-        self.add(screen="edit", comment="falta el título")
+        self.add(screen="edit", comment="the title is missing")
         text = annotations.export(self.root)
         crop = (self.root / "temp" / "edit-01.png").resolve()
         full = (self.root / "screens" / "edit.png").resolve()
@@ -106,17 +106,17 @@ class AnnotationsTest(unittest.TestCase):
             root = folder / name
             flowmap.init(root, title=f"App {name}", platform="ios")
             flowmap.add(root, "home", "Home", "Main", make_png(Path(self.tmp.name) / f"{name}.png"))
-        self.add("home", "nota de alpha", root=folder / "alpha")
-        self.add("home", "nota de gamma", root=folder / "gamma")
+        self.add("home", "note from alpha", root=folder / "alpha")
+        self.add("home", "note from gamma", root=folder / "gamma")
         return folder
 
     def test_export_over_a_folder_groups_every_map_that_has_annotations(self):
         text = annotations.export(self.make_folder_of_maps())
-        self.assertIn("nota de alpha", text)
-        self.assertIn("nota de gamma", text)
+        self.assertIn("note from alpha", text)
+        self.assertIn("note from gamma", text)
         self.assertIn("App alpha", text)
-        self.assertNotIn("App beta", text)  # sin anotaciones: no aparece
-        self.assertEqual(text.count("The user marked areas"), 1)  # la instrucción va una sola vez
+        self.assertNotIn("App beta", text)  # no annotations: it does not appear
+        self.assertEqual(text.count("The user marked areas"), 1)  # the instruction appears only once
 
     def test_export_over_a_folder_without_annotations_or_a_missing_one(self):
         folder = self.make_folder_of_maps()
@@ -125,10 +125,10 @@ class AnnotationsTest(unittest.TestCase):
             annotations.export(Path(self.tmp.name) / "ghost")
 
     def test_cli_annotations_prints_the_export(self):
-        self.add(comment="desde el CLI")
+        self.add(comment="from the CLI")
         run = subprocess.run([sys.executable, str(SCRIPTS / "flowmap.py"), "annotations", str(self.root)], capture_output=True, text=True)
         self.assertEqual(run.returncode, 0)
-        self.assertIn("desde el CLI", run.stdout)
+        self.assertIn("from the CLI", run.stdout)
 
 
 if __name__ == "__main__":

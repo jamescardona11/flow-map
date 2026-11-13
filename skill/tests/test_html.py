@@ -1,4 +1,4 @@
-"""HTML de una pantalla: la maqueta opcional (`screens[].html`) que la app Flow Map muestra en un iframe aislado."""
+"""HTML of a screen: the optional mock (`screens[].html`) that the Flow Map app shows in an isolated iframe."""
 import json
 import subprocess
 import sys
@@ -191,7 +191,7 @@ class HtmlTest(unittest.TestCase):
         (self.root / "map.json").write_text(json.dumps(data))
 
         problems = flowmap.check(self.root)
-        self.assertIn("falta el HTML de 'gone': screens-src/gone.html", problems)
+        self.assertIn("missing HTML of 'gone': screens-src/gone.html", problems)
         for screen_id in bad:
             with self.subTest(screen_id):
                 self.assertEqual(len([p for p in problems if f"'{screen_id}'" in p and "HTML" in p]), 1, problems)

@@ -1,28 +1,28 @@
-# Instalar y usar Flow Map (instrucciones para un agente)
+# Install and use Flow Map (instructions for an agent)
 
-Este archivo es para un agente (Claude Code u otro) al que su usuario le pide instalar Flow Map y dejarlo funcionando. Para trabajar *en* el código del repo, lee [`AGENTS.md`](AGENTS.md). El detalle de cada parte está en [`ai_docs/referencia.md`](ai_docs/referencia.md).
+This file is for an agent (Claude Code or another) whose user asked it to install Flow Map and get it working. To work *on* the repo's code, read [`AGENTS.md`](AGENTS.md). The detail of each part is in [`ai_docs/reference.md`](ai_docs/reference.md).
 
-Flow Map son dos piezas que solo comparten una carpeta en disco (la carpeta del mapa):
+Flow Map is two pieces that share only a folder on disk (the map folder):
 
-- el **skill `/flow-map`**, con el que tú creas y actualizas la carpeta de un mapa;
-- la **app Flow Map**, donde el usuario ve, ordena y comenta ese mapa, y desde donde te pide cambios.
+- the **`/flow-map` skill**, which you use to create and update a map folder;
+- the **Flow Map app**, where the user views, arranges and comments on that map, and from which they ask you for changes.
 
-## 1. Requisitos
+## 1. Requirements
 
-Los dos primeros los compruebas tú antes de instalar. Los demás los comprueba `./install` al terminar: nombra lo que falta y cómo conseguirlo (paso 2).
+You check the first two before installing. `./install` checks the rest when it finishes: it names what is missing and how to get it (step 2).
 
-| Requisito | Comprobación | Para qué |
+| Requirement | Check | What for |
 |---|---|---|
-| macOS | `uname` responde `Darwin` | El selector de carpetas, las miniaturas (`sips`) y la ventana propia solo existen en macOS. No se ha probado en Linux ni Windows. |
-| Node 24 o superior | `node --version` | La app ejecuta TypeScript sin compilar. |
-| Python 3 | `python3 --version` | El CLI del skill (`flowmap.py`); solo usa la biblioteca estándar. |
-| `playwright-cli` | `playwright-cli --version` | Capturar apps web con el skill. Paquete npm `@playwright/cli`. |
-| `agent-device` | `agent-device --version` | Capturar apps iOS y Android. Paquete npm `agent-device`. Solo si se van a mapear apps móviles. |
-| Chromium de Playwright | no hay comprobación rápida: se descarga una vez con `npx playwright install chromium` | «New screen», «Re-capture» y «Capture it now» de la app en web, que ejecutan `npx playwright screenshot`. |
-| `ffmpeg` (opcional) | `ffmpeg -version` | Exportar una ruta como video. |
-| `claude` en el PATH (opcional) | `claude --version` | «Run with a new Claude» desde la app. |
+| macOS | `uname` prints `Darwin` | The folder picker, the thumbnails (`sips`) and the app window only exist on macOS. Not tested on Linux or Windows. |
+| Node 24 or later | `node --version` | The app runs TypeScript without compiling. |
+| Python 3 | `python3 --version` | The skill's CLI (`flowmap.py`); it uses only the standard library. |
+| `playwright-cli` | `playwright-cli --version` | Capture web apps with the skill. npm package `@playwright/cli`. |
+| `agent-device` | `agent-device --version` | Capture iOS and Android apps. npm package `agent-device`. Only needed to map mobile apps. |
+| Playwright's Chromium | no quick check: download it once with `npx playwright install chromium` | The app's "New screen", "Re-capture" and "Capture it now" for web, which run `npx playwright screenshot`. |
+| `ffmpeg` (optional) | `ffmpeg -version` | Export a route as video. |
+| `claude` on the PATH (optional) | `claude --version` | "Run with a new Claude" from the app. |
 
-## 2. Instalar
+## 2. Install
 
 ```
 git clone https://github.com/jamescardona11/flow-map.git flow-map
@@ -31,77 +31,77 @@ npm install
 ./install --yes
 ```
 
-`./install --yes` no pregunta nada: copia el skill a `~/.claude/skills/flow-map` y escribe el comando `flow-map` en `~/.local/bin`. No pisa archivos que no sean suyos y no edita el perfil del shell. Otras formas (`--symlink`, otras carpetas, `--uninstall`, `Flow Map.app`) están en la sección «Instalación» del README.
+`./install --yes` asks nothing: it copies the skill to `~/.claude/skills/flow-map` and writes the `flow-map` command to `~/.local/bin`. It does not overwrite files that are not its own and does not edit the shell profile. Other options (`--symlink`, other folders, `--uninstall`, `Flow Map.app`) are in the README's "Install" section.
 
-Al terminar, el instalador lista bajo «Missing tools» las herramientas que no encuentra en el PATH, con el comando para conseguir cada una. No instala ninguna por su cuenta. Si faltan `playwright-cli` o `agent-device`:
+When it finishes, the installer lists under "Missing tools" the tools it cannot find on the PATH, with the command to get each one. It installs none of them on its own. If `playwright-cli` or `agent-device` is missing:
 
-1. Pregunta al usuario si va a mapear apps web, móviles o ambas, y si quiere que las instales (son paquetes globales de npm).
-2. Con el sí, ejecuta `./install --tools`: instala con `npm install -g` las que falten de esas dos y nada más. Si solo quiere una, ejecuta el comando `npm install -g ...` que imprimió el instalador para ella.
-3. Para web, descarga el navegador una vez: `playwright-cli install-browser` (para el skill) y `npx playwright install chromium` (para las peticiones desde la app).
+1. Ask the user whether they will map web apps, mobile apps or both, and whether they want you to install them (they are global npm packages).
+2. If they say yes, run `./install --tools`: it runs `npm install -g` for whichever of those two is missing and nothing else. If they only want one, run the `npm install -g ...` command the installer printed for it.
+3. For web, download the browser once: `playwright-cli install-browser` (for the skill) and `npx playwright install chromium` (for requests from the app).
 
-`ffmpeg`, `claude` y Python no los instala el instalador: enséñale al usuario la línea que imprime.
+The installer does not install `ffmpeg`, `claude` or Python: show the user the line it prints.
 
-Tres cosas más que debes saber:
+Three more things to know:
 
-- Si `~/.local/bin` no está en el PATH, el instalador imprime la línea `export PATH=...`. Enséñasela al usuario para que la añada a su perfil; no edites su perfil tú. Mientras tanto usa la ruta completa `~/.local/bin/flow-map`.
-- El comando guarda las rutas absolutas de `node` y del repo. Si el repo se mueve o cambia la versión de Node, vuelve a ejecutar `./install --yes`.
-- Un skill recién instalado aparece en Claude Code al iniciar una sesión nueva. En la sesión actual puedes usarlo igual leyendo `~/.claude/skills/flow-map/SKILL.md`.
+- If `~/.local/bin` is not on the PATH, the installer prints the `export PATH=...` line. Show it to the user so they add it to their profile; do not edit their profile yourself. Meanwhile use the full path `~/.local/bin/flow-map`.
+- The command stores the absolute paths of `node` and of the repo. If the repo moves or the Node version changes, run `./install --yes` again.
+- A newly installed skill shows up in Claude Code when a new session starts. In the current session you can still use it by reading `~/.claude/skills/flow-map/SKILL.md`.
 
-## 3. Verificar la instalación
+## 3. Verify the installation
 
 ```
 flow-map open --no-browser
 ```
 
-Debe imprimir `Opened the app at http://127.0.0.1:<puerto>/` y terminar con código 0. La app queda corriendo en segundo plano (puerto 9999 por defecto; `PORT=<n>` usa otro). Si responde «The app did not start within 5 seconds», ejecuta `npm start` en el repo para ver el error; la causa habitual es que el puerto ya está ocupado.
+It must print `Opened the app at http://127.0.0.1:<port>/` and exit with code 0. The app keeps running in the background (port 9999 by default; `PORT=<n>` uses another). If it says "The app did not start within 5 seconds", run `npm start` in the repo to see the error; the usual cause is that the port is already taken.
 
-## 4. Crear un mapa
+## 4. Create a map
 
-Sigue `~/.claude/skills/flow-map/SKILL.md`: es la guía completa (alcance, acciones prohibidas, qué cuenta como pantalla, cómo recapturar). El recorrido mínimo, donde `flowmap.py` es `python3 ~/.claude/skills/flow-map/scripts/flowmap.py`:
-
-```
-flowmap.py init <carpeta> --title "..." --platform web|ios|android
-flowmap.py add <carpeta> --id <id> --title "..." --flow "<Flujo>" --image <png> --tree <árbol.txt>
-flowmap.py add <carpeta> --id <id2> ... --from <id> --action 'tap «Continuar»'
-flowmap.py check <carpeta>
-```
-
-Antes de capturar acuerda con el usuario qué flujos recorrer, con qué cuenta y qué no se puede tocar. Las capturas guardan todo el texto visible: usa datos de prueba.
-
-## 5. Abrir el mapa
+Follow `~/.claude/skills/flow-map/SKILL.md`: it is the complete guide (scope, forbidden actions, what counts as a screen, how to recapture). The minimal path, where `flowmap.py` is `python3 ~/.claude/skills/flow-map/scripts/flowmap.py`:
 
 ```
-flow-map open <carpeta>    # en el navegador por defecto
-flow-map app <carpeta>     # en una ventana propia (necesita un navegador basado en Chromium)
+flowmap.py init <folder> --title "..." --platform web|ios|android
+flowmap.py add <folder> --id <id> --title "..." --flow "<Flow>" --image <png> --tree <tree.txt>
+flowmap.py add <folder> --id <id2> ... --from <id> --action 'tap «Continue»'
+flowmap.py check <folder>
 ```
 
-No abras navegadores por tu cuenta al terminar un mapa: dale el comando al usuario. La app se recarga sola cuando el skill cambia `map.json`.
+Before capturing, agree with the user on which flows to walk through, with which account, and what must not be touched. Captures store all the visible text: use test data.
 
-## 6. Recibir peticiones desde la app (opcional)
-
-La app puede mandar a tu sesión de Claude Code lo que el usuario escribe en el mapa.
-
-1. **Pregunta antes.** Ligar permite que la app inyecte mensajes en tu sesión.
-2. Con el sí, ejecuta `flow-map link <ruta absoluta de la carpeta>` desde dentro de la sesión.
-3. Para que los mensajes se atiendan sin pedir permiso en la terminal, el usuario debe añadir un bloque a sus ajustes de Claude Code. Enséñaselo (está en `SKILL.md`, sección «Ligar esta sesión a la app», y en el botón «How to set this up» del dock). **No edites sus ajustes tú.**
-
-El vínculo guarda el token de la sesión en `~/.flow-map/sessions/`. Es una credencial: no lo muestres, no lo copies y no lo subas a git.
-
-## 7. Leer los comentarios del usuario
+## 5. Open the map
 
 ```
-flowmap.py annotations <carpeta>
+flow-map open <folder>    # in the default browser
+flow-map app <folder>     # in its own window (needs a Chromium-based browser)
 ```
 
-Devuelve cada comentario con la pantalla, su recorrido y las rutas del recorte y de la captura. Abre cada recorte con Read y trabaja sobre esa zona.
+Do not open browsers yourself when you finish a map: give the user the command. The app reloads by itself when the skill changes `map.json`.
 
-## Dónde queda cada cosa
+## 6. Receive requests from the app (optional)
 
-| Qué | Dónde |
+The app can send what the user types in the map to your Claude Code session.
+
+1. **Ask first.** Linking lets the app inject messages into your session.
+2. If they say yes, run `flow-map link <absolute path of the folder>` from inside the session.
+3. For the messages to be handled without a permission prompt in the terminal, the user must add a block to their Claude Code settings. Show it to them (it is in `SKILL.md`, in the section about linking this session to the app, and behind the dock's "How to set this up" button). **Do not edit their settings yourself.**
+
+The link stores the session token in `~/.flow-map/sessions/`. It is a credential: do not show it, copy it or commit it to git.
+
+## 7. Read the user's comments
+
+```
+flowmap.py annotations <folder>
+```
+
+It returns each comment with its screen, its route and the paths of the crop and of the capture. Open each crop with Read and work on that area.
+
+## Where things end up
+
+| What | Where |
 |---|---|
 | Skill | `~/.claude/skills/flow-map` |
-| Comando | `~/.local/bin/flow-map` |
-| Datos de la app (recientes, vínculos de sesión, mapa de trabajo) | `~/.flow-map` (o `$FLOW_MAP_HOME`) |
-| Un mapa | la carpeta que elijas, por ejemplo `flow-map/<feature>/` en el proyecto del usuario |
+| Command | `~/.local/bin/flow-map` |
+| App data (recents, session links, working map) | `~/.flow-map` (or `$FLOW_MAP_HOME`) |
+| A map | the folder you choose, for example `flow-map/<feature>/` in the user's project |
 
-Desinstalar: `./install --uninstall --skill-dir ~/.claude/skills --bin-dir ~/.local/bin`. No borra `~/.flow-map` ni ningún mapa.
+Uninstall: `./install --uninstall --skill-dir ~/.claude/skills --bin-dir ~/.local/bin`. It does not delete `~/.flow-map` or any map.

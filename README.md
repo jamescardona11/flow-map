@@ -1,87 +1,87 @@
 # Flow Map
 
-Un mapa de todas las pantallas de una app, hecho con capturas reales, que puedes recorrer, ordenar y comentar. Desde el mismo mapa le pides cambios a Claude Code.
+A map of all the screens of an app, built from real captures, that you can walk through, arrange and comment on. From the same map you ask Claude Code for changes.
 
-![Un mapa de una app móvil completa: cada bloque es un flujo y las líneas son las acciones que llevan de una pantalla a otra](ai_docs/img/ejemplo-mapa.png)
+![A map of a whole mobile app: each block is a flow and the lines are the actions that lead from one screen to another](ai_docs/img/example-map.png)
 
-![El mismo mapa con una pantalla seleccionada: a la derecha, su captura, su descripción y las pantallas a las que lleva](ai_docs/img/ejemplo-detalle.png)
+![The same map with one screen selected: on the right, its capture, its description and the screens it leads to](ai_docs/img/example-detail.png)
 
-*La segunda captura es de una versión anterior: la barra y el panel derecho ya no se ven así.*
+*The second screenshot is from an earlier version: the bar and the right-hand panel no longer look like this.*
 
-## Qué hace
+## What it does
 
-- Abre cualquier carpeta de mapa y se recarga sola cuando la carpeta cambia.
-- Guarda cómo ordenas las pantallas en el lienzo y los grupos que armas.
-- Deja comentar una pantalla o una zona de ella, comparar una captura con la anterior y ver su historial.
-- Exporta como video el recorrido entre dos pantallas.
-- Manda peticiones a Claude Code: cambiar el mapa, maquetar una pantalla nueva o volver a capturar una que cambió.
+- Opens any map folder and reloads by itself when the folder changes.
+- Remembers how you arranged the screens on the canvas and the groups you made.
+- Lets you comment on a screen or on an area of it, compare a capture with the previous one and see its history.
+- Exports the route between two screens as a video.
+- Sends requests to Claude Code: change the map, lay out a new screen or recapture one that changed.
 
-## Cómo funciona
+## How it works
 
-Son dos piezas que solo comparten una carpeta en disco.
+It is two pieces that share only a folder on disk.
 
-El skill `/flow-map` (en `skill/`) lo usa Claude Code para crear y actualizar esa carpeta: `map.json`, las capturas y las conexiones entre pantallas. Claude navega la app con Playwright o `agent-device` y registra cada pantalla.
+The `/flow-map` skill (in `skill/`) is what Claude Code uses to create and update that folder: `map.json`, the captures and the connections between screens. Claude walks through the app with Playwright or `agent-device` and registers each screen.
 
-La app (en `src/`) abre la carpeta en el navegador. No captura nada por su cuenta: cuando pides algo desde el mapa, se lo pasa a tu sesión de Claude Code o lanza un `claude` aparte, y tú apruebas desde la interfaz los permisos que necesite.
+The app (in `src/`) opens the folder in the browser. It captures nothing by itself: when you ask for something from the map, it hands the request to your Claude Code session or launches a separate `claude`, and you approve from the interface any permission it needs.
 
-## Instalación
+## Install
 
-Necesita macOS, Node 24 y Python 3.
+Needs macOS, Node 24 and Python 3.
 
 ```
 git clone https://github.com/jamescardona11/flow-map.git flow-map && cd flow-map && npm install
-./install          # pregunta dónde poner el skill y el comando
-./install --yes    # sin preguntas: skill en ~/.claude/skills, comando en ~/.local/bin
+./install          # asks where to put the skill and the command
+./install --yes    # no questions: skill in ~/.claude/skills, command in ~/.local/bin
 ```
 
-Al terminar, el instalador lista las herramientas que no encuentra y cómo conseguirlas. `./install --tools` instala las dos que vienen de npm: `playwright-cli` para capturar web y `agent-device` para capturar móvil. `ffmpeg` (para el video) y `claude` son opcionales.
+When it finishes, the installer lists the tools it cannot find and how to get them. `./install --tools` installs the two that come from npm: `playwright-cli` to capture web apps and `agent-device` to capture mobile apps. `ffmpeg` (for video) and `claude` are optional.
 
-Otras opciones:
+Other options:
 
 ```
-./install --symlink --skill-dir ~/.claude/skills --bin-dir ~/.local/bin     # enlaza el skill en vez de copiarlo
-./install --app                                                             # crea Flow Map.app en ~/Applications
+./install --symlink --skill-dir ~/.claude/skills --bin-dir ~/.local/bin     # link the skill instead of copying it
+./install --app                                                             # create Flow Map.app in ~/Applications
 ./install --uninstall --skill-dir ~/.claude/skills --bin-dir ~/.local/bin
 ```
 
-El comando guarda la ruta de `node` y la de este repo. Si mueves el repo o cambias de Node, ejecuta `./install` otra vez.
+The command stores the path of `node` and of this repo. If you move the repo or change Node, run `./install` again.
 
-Si quien instala es un agente, [`INSTALL.md`](INSTALL.md) tiene los pasos completos.
+If an agent is doing the install, [`INSTALL.md`](INSTALL.md) has the complete steps.
 
-## Uso
+## Usage
 
-Pídele a Claude Code un mapa («hazme el mapa de flujos del login») y el skill crea la carpeta. Luego:
-
-```
-flow-map open <carpeta>    # abre el mapa en el navegador
-flow-map app <carpeta>     # lo abre en una ventana propia (necesita Chrome, Edge, Brave o similar)
-flow-map                   # abre la app con los mapas recientes
-flow-map link <carpeta>    # liga el mapa a la sesión de Claude Code desde la que lo ejecutas
-```
-
-Con el mapa ligado, lo que escribas en el dock de la app llega a esa sesión. Sin sesión, el botón «Run with a new Claude» hace el trabajo con un `claude` aparte.
-
-## Limitaciones
-
-- Solo macOS. El selector de carpetas, las miniaturas y la ventana propia dependen de él, y no se ha probado en Linux ni Windows.
-- Cuando otro proceso cambia el mapa y la página se recarga, pierdes la selección y el modo de comparación. El texto a medio escribir se conserva.
-- El video de una ruta admite 30 pantallas como máximo y no lleva subtítulos.
-
-## Desarrollo
-
-Node 24 ejecuta TypeScript directamente, así que no hay paso de compilación.
+Ask Claude Code for a map ("make me the flow map of the login") and the skill creates the folder. Then:
 
 ```
-npm test             # tests de la app
+flow-map open <folder>    # open the map in the browser
+flow-map app <folder>     # open it in its own window (needs Chrome, Edge, Brave or similar)
+flow-map                  # open the app with the recent maps
+flow-map link <folder>    # link the map to the Claude Code session you run this from
+```
+
+With the map linked, what you type in the app's dock reaches that session. Without a session, the "Run with a new Claude" button does the work with a separate `claude`.
+
+## Limitations
+
+- macOS only. The folder picker, the thumbnails and the app window depend on it, and it has not been tested on Linux or Windows.
+- When another process changes the map and the page reloads, you lose the selection and the compare mode. Text you were typing is kept.
+- A route video takes 30 screens at most and has no subtitles.
+
+## Development
+
+Node 24 runs TypeScript directly, so there is no build step.
+
+```
+npm test             # app tests
 npm run typecheck
-npm start            # la app en el puerto 9999; PORT=<n> usa otro
-python3 -m unittest discover -s skill/tests    # tests del skill
+npm start            # the app on port 9999; PORT=<n> uses another
+python3 -m unittest discover -s skill/tests    # skill tests
 ```
 
-El visor no tiene tests automáticos. `tools/viewer-check.ts` lo prueba en un navegador real contra un `claude` simulado: `PLAYWRIGHT_CORE=<ruta a playwright-core> node tools/viewer-check.ts`.
+The viewer has no automated tests. `tools/viewer-check.ts` tests it in a real browser against a fake `claude`: `PLAYWRIGHT_CORE=<path to playwright-core> node tools/viewer-check.ts`.
 
-## Más documentación
+## More documentation
 
-- [`ai_docs/referencia.md`](ai_docs/referencia.md): rutas HTTP, archivos que escribe la app, límites y errores.
-- [`skill/references/schema.md`](skill/references/schema.md): el formato de la carpeta de un mapa y los comandos del skill.
-- [`ai_docs/GLOSSARY.md`](ai_docs/GLOSSARY.md): el vocabulario del proyecto.
+- [`ai_docs/reference.md`](ai_docs/reference.md): HTTP routes, files the app writes, limits and errors.
+- [`skill/references/schema.md`](skill/references/schema.md): the format of a map folder and the skill's commands.
+- [`ai_docs/GLOSSARY.md`](ai_docs/GLOSSARY.md): the project's vocabulary.

@@ -1,4 +1,4 @@
-"""Baseline: la imagen de «antes» de una pantalla (la app de hoy frente a un rediseño), aparte de las recapturas."""
+"""Baseline: the «before» image of a screen (today's app against a redesign), separate from recaptures."""
 import shutil
 import subprocess
 import sys
@@ -73,20 +73,20 @@ class BaselineTest(unittest.TestCase):
         self.add(before=self.today)
         self.assertEqual(flowmap.check(self.root), [])
         (self.root / "baselines" / "home.png").unlink()
-        self.assertTrue(any("home" in problem and "antes" in problem for problem in flowmap.check(self.root)))
+        self.assertTrue(any("home" in problem and "before" in problem for problem in flowmap.check(self.root)))
 
-    @unittest.skipUnless(HAS_SIPS, "necesita sips (macOS)")
+    @unittest.skipUnless(HAS_SIPS, "needs sips (macOS)")
     def test_a_tall_baseline_gets_its_own_small_thumbnail(self):
         tall = make_png(self.base / "tall.png", width=300, height=1200)
         self.add(before=tall)
         screen = self.screen()
         self.assertEqual(screen["baselineThumb"], "thumbs/home-before.jpg")
         self.assertEqual(flowmap._image_size(self.root / screen["baselineThumb"])[1], flowmap.THUMB_PX)
-        flowmap.set_baseline(self.root, "home", self.today)  # un «antes» pequeño ya no necesita miniatura
+        flowmap.set_baseline(self.root, "home", self.today)  # a small «before» no longer needs a thumbnail
         self.assertNotIn("baselineThumb", self.screen())
         self.assertFalse((self.root / "thumbs" / "home-before.jpg").exists())
 
-    @unittest.skipUnless(HAS_SIPS, "necesita sips (macOS)")
+    @unittest.skipUnless(HAS_SIPS, "needs sips (macOS)")
     def test_thumbs_command_backfills_and_check_flags_a_missing_baseline_thumb(self):
         self.add(before=make_png(self.base / "tall.png", width=300, height=1200))
         data = flowmap._load(self.root)

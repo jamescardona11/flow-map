@@ -1,143 +1,143 @@
 ---
 name: flow-map
-description: Crea y mantiene la carpeta de un mapa de flujos de pantallas (map.json, capturas, aristas entre pantallas, historial) de una feature o de toda una app, web o móvil, a partir de capturas reales con Playwright, agent-device o argent. El mapa se ve, se ordena y se anota en la app Flow Map, no en este skill: el skill escribe la carpeta y la app la abre. Úsalo siempre que el usuario pida un "mapa de la feature", "mapa de flujos/pantallas", "screen map", "user flow con capturas", "ver todas las pantallas", "navegar la app visualmente", documentar un flujo con evidencia visual, "actualizar el mapa" tras cambiar una pantalla o saber qué pantallas cambiaron, comparar la app de hoy con un rediseño, o leer las anotaciones que el usuario dejó en un mapa; también si quiere recorrer una app con Playwright, agent-device o argent para dejarla mapeada. No es para tests e2e reproducibles, QA exploratorio que reporta bugs ni videos de la app.
+description: Creates and maintains the folder of a screen-flow map (map.json, screenshots, edges between screens, history) for a feature or a whole web or mobile app, from real captures taken with Playwright, agent-device or argent. The map is viewed, arranged and annotated in the Flow Map app, not in this skill: the skill writes the folder and the app opens it. Use it whenever the user asks for a "feature map", "flow map", "screen map", "user flow with screenshots", "see all the screens", "navigate the app visually", to document a flow with visual evidence, to "update the map" after a screen changed or to find out which screens changed, to compare today's app with a redesign, or to read the annotations the user left on a map; also if they want to walk through an app with Playwright, agent-device or argent to get it mapped. Not for reproducible e2e tests, exploratory QA that reports bugs, or app videos.
 ---
 
 # flow-map
 
-Un mapa = una carpeta con `map.json` (pantallas, aristas, ramas sin explorar), `screens/*.png` y archivos de apoyo. **Este skill solo crea y mantiene esa carpeta.** Verla, ordenarla, comentarla y pedirle cambios a Claude lo hace la app **Flow Map** (el comando `flow-map`): el contrato entre las dos piezas es la carpeta, nada más (ADR 0001 de la app). Tú capturas con la herramienta de navegador o dispositivo que corresponda; el CLI `scripts/flowmap.py` registra, actualiza y valida, así el mapa nunca se edita a mano. En los ejemplos, `flowmap.py` es `python3 ~/.claude/skills/flow-map/scripts/flowmap.py`.
+A map = a folder with `map.json` (screens, edges, unexplored branches), `screens/*.png` and supporting files. **This skill only creates and maintains that folder.** Viewing it, arranging it, commenting on it and asking Claude for changes is done by the **Flow Map** app (the `flow-map` command): the skill and the app share only the map folder, nothing else. You capture with the browser or device tool that fits; the `scripts/flowmap.py` CLI registers, updates and validates, so the map is never edited by hand. In the examples, `flowmap.py` is `python3 ~/.claude/skills/flow-map/scripts/flowmap.py`.
 
-Esquema completo y todos los comandos: `references/schema.md`. Cómo capturar con cada herramienta: `references/capture-backends.md`.
+Full schema and every command: `references/schema.md`. How to capture with each tool: `references/capture-backends.md`.
 
-## Antes de tocar la app
+## Before touching the app
 
-1. **Elige herramienta** según la plataforma: web → Playwright; móvil → agent-device primero, argent como respaldo. Detalles en `references/capture-backends.md`.
-2. **Define la carpeta**: `flow-map/<feature>/` en la raíz del proyecto (o la que pida el usuario). `flowmap.py init <carpeta> --title "..." --platform web|ios|android`.
-3. **Acuerda el alcance** con el usuario: qué flujos, con qué cuenta/datos, y qué está prohibido tocar. Explorar sin esto es lo que rompe datos reales.
-4. **Lista de acciones prohibidas por defecto**: borrar, pagar, suscribirse, enviar mensajes o correos, cerrar sesión, resetear datos. Solo se hacen si el usuario las autoriza en esta sesión. Un paywall o un permiso del sistema se registra como límite del flujo; no prueba que la función protegida funcione.
-5. **Usa cuentas y datos de prueba.** El mapa guarda capturas y el árbol de accesibilidad completos, con todo el texto visible. Si la app muestra datos reales de personas (en salud, pacientes), no los captures ni compartas la carpeta sin revisarla.
+1. **Pick a tool** by platform: web → Playwright; mobile → agent-device first, argent as a fallback. Details in `references/capture-backends.md`.
+2. **Define the folder**: `flow-map/<feature>/` at the project root (or the one the user asks for). `flowmap.py init <folder> --title "..." --platform web|ios|android`.
+3. **Agree on the scope** with the user: which flows, with which account/data, and what is off limits. Exploring without this is what breaks real data.
+4. **Actions forbidden by default**: deleting, paying, subscribing, sending messages or emails, signing out, resetting data. They are done only if the user authorizes them in this session. A paywall or a system permission is recorded as the limit of the flow; it does not prove the protected feature works.
+5. **Use test accounts and data.** The map stores full screenshots and the full accessibility tree, with all the visible text. If the app shows real people's data (in health, patients), do not capture it or share the folder without reviewing it.
 
-## Qué cuenta como pantalla
+## What counts as a screen
 
-Una pantalla es un estado estable que el usuario distingue de otro: otro título, otro conjunto de acciones o otro resultado. Un modal o diálogo sobre una pantalla es una pantalla propia (con arista "abrir" desde ella y otra de vuelta). Misma pantalla con otros datos, otra fila de una lista o otro scroll no se duplica: en web captura página completa (`--full-page`) y usa `link`. Esta regla es la que mantiene el mapa legible y estable entre recapturas.
+A screen is a stable state the user tells apart from another: a different title, a different set of actions or a different result. A modal or dialog over a screen is a screen of its own (with an "open" edge from it and another one back). The same screen with other data, another row of a list or another scroll position is not duplicated: on web, capture the full page (`--full-page`) and use `link`. This rule is what keeps the map readable and stable across recaptures.
 
-## Capturar (bucle)
+## Capture (loop)
 
-Por cada pantalla estable: capturar imagen + árbol de accesibilidad, y registrarla.
+For each stable screen: capture image + accessibility tree, and register it.
 
 ```
-flowmap.py add <carpeta> --id <screenId> --title "..." --flow "<Flujo>" --image <png> --tree <árbol.txt> \
-  --from <screenIdPadre> --action 'tap «Continuar»'
+flowmap.py add <folder> --id <screenId> --title "..." --flow "<Flow>" --image <png> --tree <tree.txt> \
+  --from <parentScreenId> --action 'tap «Continue»'
 ```
 
-- **`--id` semántico y estable** (`a1-elegir-institucion`, no `001`): es la identidad de la pantalla para siempre; recapturar usa el mismo id. Sin esto no hay forma de saber qué cambió.
-- **`--flow`** agrupa pantallas en filas del mapa; un flujo por objetivo del usuario ("Entrar", "Agregar líder", "Errores").
-- **`--action`** dice qué se hizo en la pantalla padre: `tap «Continuar»`, `escribir email inválido`, `submit`. Es la etiqueta de la flecha en la app, así que debe leerse sola.
-- **Siempre pasa `--tree`** si la herramienta lo ofrece. Sin árbol, la detección de cambios cae a comparar píxeles y cualquier dato dinámico la dispara.
-- **Esperar a que la pantalla se estabilice** antes de capturar (loaders, animaciones); si no, quedan capturas de transición.
+- **Semantic, stable `--id`** (`a1-choose-institution`, not `001`): it is the screen's identity forever; recapturing uses the same id. Without it there is no way to know what changed.
+- **`--flow`** groups screens into rows of the map; one flow per user goal ("Sign in", "Add leader", "Errors").
+- **`--action`** says what was done on the parent screen: `tap «Continue»`, `type an invalid email`, `submit`. It is the arrow's label in the app, so it must read on its own.
+- **Always pass `--tree`** if the tool offers it. Without a tree, change detection falls back to comparing pixels and any dynamic data triggers it.
+- **Wait for the screen to settle** before capturing (loaders, animations); otherwise you end up with transition captures.
 
-### Bifurcaciones y vueltas
+### Branches and returns
 
-- Si de una pantalla sales por varias acciones, repite `add --from` (una por rama). La app muestra un botón por rama.
-- Si una acción lleva a una pantalla que ya existe (volver, cancelar, ciclos): `flowmap.py link <carpeta> --from A --to B --action "..."`. No dupliques la pantalla.
-- Si sabes dónde se tocó, añade `--at x,y,w,h` (0-1 sobre la pantalla de origen) a `add`/`link`: la app dibuja una zona clicable y la pantalla se recorre como un prototipo. Si los árboles traen marcos (`Button "Skip" (x, y, w, h)`), `flowmap.py hotspots <carpeta>` las deriva solo, cuando la acción nombra al elemento y la coincidencia es única.
-- Cuando el árbol muestre algo tocable que no vas a explorar ahora: `flowmap.py frontier <carpeta> --from A --action "tap «Filtro»"`. Aparece en el mapa como rama punteada "sin explorar" y desaparece solo cuando después la registras con `add`/`link` con la misma acción. Así el mapa dice honestamente qué falta para cubrir la app.
-- `flowmap.py flow <carpeta> --id F --hide` deja un flujo oculto al abrir el mapa, útil para material histórico.
+- If you leave a screen through several actions, repeat `add --from` (one per branch). The app shows one button per branch.
+- If an action leads to a screen that already exists (back, cancel, cycles): `flowmap.py link <folder> --from A --to B --action "..."`. Do not duplicate the screen.
+- If you know where the tap happened, add `--at x,y,w,h` (0-1 over the source screen) to `add`/`link`: the app draws a clickable area and the screen can be walked like a prototype. If the trees carry frames (`Button "Skip" (x, y, w, h)`), `flowmap.py hotspots <folder>` derives them on its own, when the action names the element and the match is unique.
+- When the tree shows something tappable that you will not explore now: `flowmap.py frontier <folder> --from A --action "tap «Filter»"`. It shows up in the map as a dotted "unexplored" branch and disappears on its own once you register it later with `add`/`link` using the same action. This way the map honestly says what is missing to cover the app.
+- `flowmap.py flow <folder> --id F --hide` leaves a flow hidden when the map opens, useful for historical material.
 
-### Exploración guiada
+### Guided exploration
 
-No hagas un crawl ciego de toda la app. Recorre un flujo a la vez, con un presupuesto de pasos acordado, y registra lo demás como `frontier`. Deduplica antes de añadir: si la pantalla ya existe con otros datos (otra fila de una lista), es la misma pantalla, usa `link`.
+Do not blindly crawl the whole app. Walk one flow at a time, with an agreed step budget, and record the rest as `frontier`. Deduplicate before adding: if the screen already exists with other data (another row of a list), it is the same screen, use `link`.
 
-### Ejemplo
+### Example
 
 ```
 flowmap.py init flow-map/login --title "Login" --platform web
-flowmap.py add flow-map/login --id a1-login --title "Login" --flow Entrar --image /tmp/a1.png --tree /tmp/a1.txt
-flowmap.py add flow-map/login --id a2-error --title "Credenciales inválidas" --flow Entrar --image /tmp/a2.png --tree /tmp/a2.txt \
-  --from a1-login --action 'enviar contraseña incorrecta'
-flowmap.py link flow-map/login --from a2-error --to a1-login --action 'tap «Reintentar»'
-flowmap.py frontier flow-map/login --from a1-login --action 'tap «Olvidé mi contraseña»'
+flowmap.py add flow-map/login --id a1-login --title "Login" --flow "Sign in" --image /tmp/a1.png --tree /tmp/a1.txt
+flowmap.py add flow-map/login --id a2-error --title "Invalid credentials" --flow "Sign in" --image /tmp/a2.png --tree /tmp/a2.txt \
+  --from a1-login --action 'submit a wrong password'
+flowmap.py link flow-map/login --from a2-error --to a1-login --action 'tap «Retry»'
+flowmap.py frontier flow-map/login --from a1-login --action 'tap «Forgot my password»'
 flowmap.py check flow-map/login
 ```
 
-## Validar y abrir en la app
+## Validate and open in the app
 
 ```
-flowmap.py check <carpeta>    # aristas rotas, imágenes faltantes (código 1 si hay problemas)
-flowmap.py thumbs <carpeta>   # miniaturas que falten (add y update ya las crean; usa sips, macOS)
+flowmap.py check <folder>    # broken edges, missing images (exit code 1 if there are problems)
+flowmap.py thumbs <folder>   # missing thumbnails (add and update already create them; uses sips, macOS)
 ```
 
-Este skill ya no genera ningún HTML ni sirve el mapa: `build`, `serve`, `portal` y `bundle` se retiraron y responden con un aviso que apunta a la app. Al terminar, **dile al usuario que abra la carpeta en la app Flow Map**:
+This skill no longer generates any HTML or serves the map: `build`, `serve`, `portal` and `bundle` were retired and answer with a notice pointing to the app. When done, **tell the user to open the folder in the Flow Map app**:
 
 ```
-flow-map open <carpeta>   # abre el mapa en el navegador por defecto (arranca la app si no corre)
-flow-map                  # solo abre la app, con los recientes
+flow-map open <folder>   # opens the map in the default browser (starts the app if it is not running)
+flow-map                 # just opens the app, with the recent maps
 ```
 
-(`flow-map` lo instala `./install` de la app; si no está en el PATH, es `node <repo de la app>/src/cli.ts open|app <carpeta>`). En la app el usuario recorre el lienzo con pan y zoom, ve el detalle de cada pantalla con sus salidas y entradas, ordena y agrupa pantallas, compara antes/después, ve el historial y comenta; la app recarga sola cuando este skill cambia `map.json`. No abras ventanas ni navegadores tú: dale el comando.
+(`flow-map` is installed by the app's `./install`; if it is not on the PATH, it is `node <app repo>/src/cli.ts open|app <folder>`). In the app the user pans and zooms the canvas, sees the detail of each screen with its exits and entries, arranges and groups screens, compares before/after, sees the history and comments; the app reloads on its own when this skill changes `map.json`. Do not open windows or browsers yourself: give them the command.
 
-Lo que escribe la app en la carpeta y este skill no toca ni borra: `layout.json` (posiciones), `groups.json` (grupos), `DESIGN.md` (contrato de diseño para pantallas nuevas), `temp/` (comentarios y recortes), `exports/` (videos de rutas). El skill conserva las claves de `map.json` que no conoce.
+What the app writes into the folder and this skill neither touches nor deletes: `layout.json` (positions), `groups.json` (groups), `DESIGN.md` (design contract for new screens), `temp/` (comments and crops), `exports/` (route videos). The skill preserves the `map.json` keys it does not know.
 
-## Leer las anotaciones del usuario
+## Read the user's annotations
 
-El usuario comenta pantallas (o zonas) en la app; los comentarios quedan en `<mapa>/temp/annotations.json` con un recorte PNG de cada uno. Para leerlos:
-
-```
-flowmap.py annotations <carpeta>   # el texto para Claude; sobre una carpeta de mapas junta los que tengan anotaciones
-```
-
-El texto abre con la instrucción de tratar cada comentario como la petición (y de no editar código si las capturas son de otra app) y trae la pantalla, su flujo, el recorrido desde la entrada, las rutas absolutas del recorte y de la captura completa, y el comentario; si la pantalla se recapturó después de anotarla, lo avisa. Cuando el usuario te pase anotaciones: abre cada recorte con Read, ubica la pantalla en `map.json` por su id y trabaja sobre esa zona, no sobre toda la captura. `temp/` es un borrador: bórralo al terminar.
-
-## Actualizar tras un cambio
-
-1. Recaptura solo las pantallas afectadas. El mapa no guarda qué archivo de código origina cada pantalla, así que decidir cuáles son (a partir de un diff, por ejemplo) es juicio tuyo: usa los títulos y flujos de `map.json`, y ante la duda recaptura el flujo entero.
-2. `flowmap.py update <carpeta> --id <screenId> --image <png> --tree <árbol.txt>`. Responde `changed` y similitud; el JSON guarda qué líneas del árbol se añadieron/quitaron en `lastChange`. Si cambió, además guarda la captura reemplazada en `history/<id>/<YYYYMMDDTHHMMSSZ>.<ext>` (hora UTC en que se tomó esa captura): una por cada recaptura con cambio, para ver cómo evolucionó la pantalla; la app lee esa carpeta.
-3. `flowmap.py status <carpeta>` lista las pantallas cambiadas y las ramas pendientes.
-4. Revisa con el usuario (en la app, la comparación muestra el antes y el después lado a lado) y confirma con `flowmap.py ack <carpeta> --id <screenId>`, que borra el «antes» (`history/<id>.<ext>`) pero nunca `history/<id>/`.
-
-Si una pantalla cambió tanto que sus aristas ya no valen, recaptura también las vecinas: el CLI solo detecta cambios de la pantalla recapturada, no de las rutas hacia ella.
-
-## Comparar la app actual con un rediseño
-
-1. Por cada pantalla: `add ... --image <rediseño> --before <app de hoy>`; para una pantalla ya añadida, `flowmap.py baseline <carpeta> --id <id> --image <app de hoy>`. El «antes» queda en `baselines/` y la pantalla sigue `ok`, sin marcas de «changed». La app dibuja ambas lado a lado en el mapa (botón «Before | After») y en el detalle.
-2. Las aristas salen de la navegación real del diseño (qué enlaza a qué), no se inventan. Pantallas sin captura de hoy no tienen «antes»: cuéntalas al entregar, es lo que falta por capturar.
-3. Dile al usuario que abra la carpeta en la app para anotar por pantalla qué mantiene y qué quiere reevaluar, y luego lee sus comentarios con `flowmap.py annotations`.
-
-## Pantallas HTML (mocks)
-
-Para un diseño (una pantalla que aún no existe en la app, o un tablero), Claude escribe el HTML y el skill lo registra en la estructura:
+The user comments on screens (or areas) in the app; the comments are kept in `<map>/temp/annotations.json` with a PNG crop of each one. To read them:
 
 ```
-flowmap.py add <carpeta> --id ... --image <png> --html <mock.html>     # al añadir la pantalla
-flowmap.py html <carpeta> --id <id> --file <mock.html>                  # a una pantalla que ya existe (reemplaza el anterior)
+flowmap.py annotations <folder>   # the text for Claude; over a folder of maps it gathers those that have annotations
 ```
 
-El skill copia el archivo a `screens-src/<id>.html` y pone `"html"` en la pantalla. La app lo muestra vivo en el detalle (botón «Capture | HTML»), junto a la captura PNG, que sigue siendo la imagen del mapa (render del HTML con Playwright). El HTML debe ser **autocontenido**: CSS y JS en línea, imágenes y fuentes como `data:`, sin `<script src>`, `<link href>`, `@import`, `<iframe>` ni recursos de red; la app lo sirve en un `sandbox` sin red y el skill rechaza (código 1, sin escribir nada) lo que cargue algo externo, no sea `.html` o pase de 5 MB. `check` avisa si el archivo falta o la ruta no es relativa y dentro de la carpeta.
+The text opens with the instruction to treat each comment as the request (and not to edit code if the screenshots are of another app) and brings the screen, its flow, the route from the entry, the absolute paths of the crop and of the full screenshot, and the comment; if the screen was recaptured after being annotated, it says so. When the user hands you annotations: open each crop with Read, locate the screen in `map.json` by its id and work on that area, not on the whole screenshot. `temp/` is a draft: delete it when done.
 
-## Ligar esta sesión a la app (pedirte cambios desde el mapa)
+## Update after a change
 
-Si el usuario quiere pedirle cosas a Claude desde la app (la caja del dock, «New screen», «Re-capture»), la app puede mandar esos mensajes a **esta** sesión en vez de lanzar un Claude aparte. Solo se puede ligar desde dentro de la sesión, porque el socket y el token están en sus variables (`CLAUDE_CODE_MESSAGING_SOCKET` y `CLAUDE_CODE_MESSAGING_TOKEN`), que ve tu herramienta Bash.
+1. Recapture only the affected screens. The map does not store which code file originates each screen, so deciding which ones they are (from a diff, for example) is your judgment: use the titles and flows in `map.json`, and when in doubt recapture the whole flow.
+2. `flowmap.py update <folder> --id <screenId> --image <png> --tree <tree.txt>`. It answers `changed` and similarity; the JSON stores which tree lines were added/removed in `lastChange`. If it changed, it also stores the replaced capture in `history/<id>/<YYYYMMDDTHHMMSSZ>.<ext>` (UTC time at which that capture was taken): one for each recapture with a change, to see how the screen evolved; the app reads that folder.
+3. `flowmap.py status <folder>` lists the changed screens and the pending branches.
+4. Review with the user (in the app, the comparison shows before and after side by side) and confirm with `flowmap.py ack <folder> --id <screenId>`, which deletes the «before» (`history/<id>.<ext>`) but never `history/<id>/`.
 
-1. **Pregunta antes de ligar.** Ligar deja que la app inyecte mensajes en esta sesión: no lo hagas por tu cuenta aunque acabes de crear el mapa. Pregunta una vez («¿Ligo este mapa a esta sesión para que me pidas cambios desde la app?») y espera el sí.
-2. Con el sí, ejecuta con la ruta **absoluta** de la carpeta: `flow-map link <carpeta>` (o `node <repo de la app>/src/cli.ts link <carpeta>` si `flow-map` no está en el PATH). Escribe el vínculo en el directorio de datos de la app (permisos 600), nunca dentro del mapa. Si responde que faltan las variables, esta sesión no admite mensajes entre sesiones: dilo y sugiere el camino sin sesión (en la app, «Run with a new Claude»).
-3. La sesión solo atenderá los mensajes sin pedir permiso en la terminal si el usuario tiene en sus ajustes `"crossSessionInbound": "accept"` y reglas `allow` para leer y editar esa carpeta y ejecutar los comandos del skill. **No edites sus ajustes tú**: enséñale el bloque (con la ruta del mapa) y que lo mezcle él, o que lo copie del botón «?» del dock de la app:
+If a screen changed so much that its edges no longer hold, recapture the neighbouring ones too: the CLI only detects changes of the recaptured screen, not of the routes leading to it.
+
+## Compare the current app with a redesign
+
+1. For each screen: `add ... --image <redesign> --before <today's app>`; for a screen already added, `flowmap.py baseline <folder> --id <id> --image <today's app>`. The «before» is kept in `baselines/` and the screen stays `ok`, with no «changed» marks. The app draws both side by side in the map («Before | After» button) and in the detail.
+2. Edges come from the design's real navigation (what links to what), they are not invented. Screens without a capture of today's app have no «before»: count them when delivering, they are what is left to capture.
+3. Tell the user to open the folder in the app to annotate, per screen, what they keep and what they want to re-evaluate, and then read their comments with `flowmap.py annotations`.
+
+## HTML screens (mocks)
+
+For a design (a screen that does not exist yet in the app, or a board), Claude writes the HTML and the skill registers it in the structure:
+
+```
+flowmap.py add <folder> --id ... --image <png> --html <mock.html>     # when adding the screen
+flowmap.py html <folder> --id <id> --file <mock.html>                  # to a screen that already exists (replaces the previous one)
+```
+
+The skill copies the file to `screens-src/<id>.html` and sets `"html"` on the screen. The app shows it live in the detail («Capture | HTML» button), next to the PNG capture, which remains the map's image (a Playwright render of the HTML). The HTML must be **self-contained**: inline CSS and JS, images and fonts as `data:`, no `<script src>`, `<link href>`, `@import`, `<iframe>` or network resources; the app serves it in a `sandbox` with no network and the skill rejects (exit code 1, writing nothing) anything that loads something external, is not `.html` or exceeds 5 MB. `check` warns if the file is missing or the path is not relative and inside the folder.
+
+## Link this session to the app (ask you for changes from the map)
+
+If the user wants to ask Claude for things from the app (the dock's box, «New screen», «Re-capture»), the app can send those messages to **this** session instead of launching a separate Claude. It can only be linked from inside the session, because the socket and the token are in its variables (`CLAUDE_CODE_MESSAGING_SOCKET` and `CLAUDE_CODE_MESSAGING_TOKEN`), which your Bash tool sees.
+
+1. **Ask before linking.** Linking lets the app inject messages into this session: do not do it on your own even if you just created the map. Ask once ("Shall I link this map to this session so you can ask me for changes from the app?") and wait for the yes.
+2. With the yes, run it with the **absolute** path of the folder: `flow-map link <folder>` (or `node <app repo>/src/cli.ts link <folder>` if `flow-map` is not on the PATH). It writes the link into the app's data directory (permissions 600), never inside the map. If it answers that the variables are missing, this session does not support cross-session messages: say so and suggest the sessionless route (in the app, «Run with a new Claude»).
+3. The session will only handle the messages without asking permission in the terminal if the user has `"crossSessionInbound": "accept"` in their settings and `allow` rules to read and edit that folder and run the skill's commands. **Do not edit their settings yourself**: show them the block (with the map's path) and let them merge it, or copy it from the «?» button in the app's dock:
 
 ```json
 {
   "crossSessionInbound": "accept",
   "permissions": { "allow": [
-    "Read(//<carpeta>/**)",
-    "Edit(//<carpeta>/**)",
+    "Read(//<folder>/**)",
+    "Edit(//<folder>/**)",
     "Bash(python3 ~/.claude/skills/flow-map/scripts/flowmap.py *)",
     "Bash(npx playwright screenshot *)"
   ] }
 }
 ```
 
-4. Dile que en el dock el chip pasa a «Session linked» (se actualiza en unos 10 s) y que las peticiones de la app llegan aquí como mensajes; al recibirlas, ejecuta el skill como siempre (`add`, `update`, `html`, `check`) y responde con lo que cambió. Un vínculo nuevo reemplaza al anterior de ese mapa.
+4. Tell them that in the dock the chip changes to «Session linked» (it updates in about 10 s) and that the app's requests arrive here as messages; when you receive them, run the skill as usual (`add`, `update`, `html`, `check`) and answer with what changed. A new link replaces the previous one for that map.
 
-## Qué no hace este skill
+## What this skill does not do
 
-- No muestra ni sirve el mapa: eso es la app Flow Map.
-- No decide por ti qué acciones son seguras: eso es el paso 4 de "Antes de tocar la app".
-- No garantiza cobertura total de una app: lo no explorado queda como `frontier` o simplemente ausente. Dilo al entregar.
+- It does not show or serve the map: that is the Flow Map app.
+- It does not decide for you which actions are safe: that is step 4 of "Before touching the app".
+- It does not guarantee full coverage of an app: whatever is unexplored is left as `frontier` or simply absent. Say so when delivering.
