@@ -1,126 +1,87 @@
 # Flow Map
 
-Aplicación para ver, ordenar y comentar mapas de pantallas de una app y pedirle cambios a Claude Code, incluida la creación de pantallas nuevas.
+Un mapa de todas las pantallas de una app, hecho con capturas reales, que puedes recorrer, ordenar y comentar. Desde el mismo mapa le pides cambios a Claude Code.
 
-![Un mapa de una app móvil completa abierto en Flow Map: cada bloque de pantallas es un flujo y las líneas son las acciones que llevan de una pantalla a otra](ai_docs/img/ejemplo-mapa.png)
-
-*Un mapa de una app móvil completa: las pantallas son capturas reales, agrupadas por flujo y unidas por las acciones que llevan de una a otra.*
+![Un mapa de una app móvil completa: cada bloque es un flujo y las líneas son las acciones que llevan de una pantalla a otra](ai_docs/img/ejemplo-mapa.png)
 
 ![El mismo mapa con una pantalla seleccionada: a la derecha, su captura, su descripción y las pantallas a las que lleva](ai_docs/img/ejemplo-detalle.png)
 
-*Al elegir una pantalla, el panel derecho muestra su captura, su descripción y a dónde lleva. Esta captura es de una versión anterior del visor: la barra y el panel han cambiado de aspecto.*
+*La segunda captura es de una versión anterior: la barra y el panel derecho ya no se ven así.*
 
 ## Qué hace
 
-- **Ver:** abre cualquier carpeta de mapa, recuerda los recientes y se recarga sola cuando la carpeta cambia.
-- **Ordenar:** lienzo con zoom, disposición guardada y grupos de pantallas que se mueven juntas.
-- **Comentar:** notas sobre una pantalla o una zona, copiar la captura, historial de versiones y video de la ruta entre dos pantallas.
-- **Pedirle cambios a Claude Code:** a la sesión donde editas el mapa o a un Claude propio con permisos que apruebas desde la interfaz; incluye pantallas nuevas y recapturas.
-- **Ventana propia:** `flow-map app` o `Flow Map.app` (macOS).
+- Abre cualquier carpeta de mapa y se recarga sola cuando la carpeta cambia.
+- Guarda cómo ordenas las pantallas en el lienzo y los grupos que armas.
+- Deja comentar una pantalla o una zona de ella, comparar una captura con la anterior y ver su historial.
+- Exporta como video el recorrido entre dos pantallas.
+- Manda peticiones a Claude Code: cambiar el mapa, maquetar una pantalla nueva o volver a capturar una que cambió.
 
-Empieza por [Desarrollo](#desarrollo) para arrancarla. El resto de este documento es la referencia de cada parte.
+## Cómo funciona
 
-## Las dos piezas
+Son dos piezas que solo comparten una carpeta en disco.
 
-Son dos piezas separadas que solo comparten un formato de carpeta:
+El skill `/flow-map` (en `skill/`) lo usa Claude Code para crear y actualizar esa carpeta: `map.json`, las capturas y las conexiones entre pantallas. Claude navega la app con Playwright o `agent-device` y registra cada pantalla.
 
-| Pieza | Qué hace | Dónde vive |
-|---|---|---|
-| **Skill `/flow-map`** | Crea y actualiza la carpeta de un mapa desde Claude Code (`map.json`, `screens/`, `layout.json`, `temp/`). | `skill/` en este repo (la fuente); `./install` la despliega en `~/.claude/skills/flow-map` |
-| **App Flow Map** (este repo) | Abre cualquier carpeta de mapa: recientes, recarga en vivo, comentarios, capturas y peticiones a Claude. | `src/` en este repo; `./install` escribe el comando `flow-map` |
-
-El contrato entre las dos es la carpeta del mapa; el esquema vigente está en el `references/schema.md` del skill. Ninguna pieza importa código de la otra ([ADR 0001](ai_docs/adr/0001-app-y-skill-separados.md)).
-
-## Estado
-
-Funciona y tiene tests (`npm test`). Lo que conviene saber antes de usarla:
-
-- **Solo macOS.** El selector de carpetas, las miniaturas (`sips`) y la ventana propia dependen de macOS; no se ha probado en Linux ni Windows.
-- **Exportar una ruta como video necesita `ffmpeg`** en el PATH (`brew install ffmpeg`); sin él la app responde un aviso claro. El botón «Export route to this screen as video» del detalle (o `POST /__flowmap-app/export-route {to, from?}`) escribe `exports/route-<desde>-to-<hasta>.mp4` en la carpeta del mapa con la ruta más corta por las aristas, de 30 pantallas como máximo (`400` si pasa), con un recuadro sobre la zona tocada y un fundido entre pantallas. Sin subtítulos: el ffmpeg de Homebrew no trae `drawtext`.
-- **La recarga en vivo pierde parte del estado.** Cuando otro proceso cambia el mapa y el visor se recarga, se pierden la selección, la pantalla elegida en el historial y el modo de comparación; los borradores (texto a medio escribir) se conservan.
-
-## Comentarios
-
-El visor comenta una pantalla, o una zona de ella, a través de `/__flowmap/annotations` y `/__flowmap/export` (`src/annotations.ts`). Los comentarios se guardan en `temp/annotations.json` de la carpeta del mapa abierto, con el recorte de cada uno en `temp/<id>.png`, en el mismo formato que usa el skill `/flow-map`; `GET /__flowmap/export` devuelve el mismo texto que el `export` del skill, listo para pasárselo a Claude. Crear, editar o borrar exige la cabecera `X-Flowmap: 1` y, si hay `Origin`, que sea el de la propia app. La disposición y los grupos también se guardan en la carpeta del mapa (`src/layout-groups.ts`):
-`GET/PUT/DELETE /__flowmap/layout` leen, reemplazan y borran `layout.json` (`{"positions": {"<id>": {"x", "y"}}}`, el formato del skill; solo se guardan pantallas que existen y `PUT` valida todo antes de escribir) y `GET/PUT /__flowmap/groups` leen y reemplazan `groups.json` (`{"version": 1, "groups": [{"id", "name", "members": [...]}]}`; un grupo tiene de 2 a 200 pantallas y una pantalla está como mucho en un grupo; una lista vacía borra el archivo). Los grupos van en su propio archivo porque el skill reescribe `layout.json` sin las claves que no conoce: **el skill no conoce los grupos**. Ambos se escriben con archivo temporal y renombrado, con las mismas protecciones que los comentarios, y la página que guarda no recibe el aviso de cambio del mapa (el de otro proceso sí). En el visor, Mayús/⌘-clic selecciona pantallas, `G` crea un grupo con ellas, arrastrar una pantalla de un grupo mueve todo el grupo y «Ungroup» lo deshace; «Reset layout» no borra los grupos.
-
-## Documentación
-
-- [`ai_docs/GLOSSARY.md`](ai_docs/GLOSSARY.md): el vocabulario del proyecto.
-- [`ai_docs/adr/`](ai_docs/adr): decisiones difíciles de revertir.
+La app (en `src/`) abre la carpeta en el navegador. No captura nada por su cuenta: cuando pides algo desde el mapa, se lo pasa a tu sesión de Claude Code o lanza un `claude` aparte, y tú apruebas desde la interfaz los permisos que necesite.
 
 ## Instalación
 
-Si quien instala es un agente (Claude Code u otro), [`INSTALL.md`](INSTALL.md) tiene los pasos completos: requisitos, instalación, verificación y uso.
+Necesita macOS, Node 24 y Python 3.
 
 ```
 git clone https://github.com/jamescardona11/flow-map.git flow-map && cd flow-map && npm install
-./install                 # pregunta dónde poner el skill y el comando (y, opcional, Flow Map.app en macOS)
-./install --yes           # sin preguntas: skill en ~/.claude/skills, comando en ~/.local/bin
-./install --symlink --skill-dir ~/.claude/skills --bin-dir ~/.local/bin   # para desarrollar: enlaza en vez de copiar
-./install --tools         # instala con npm las herramientas de captura que falten (playwright-cli, agent-device)
+./install          # pregunta dónde poner el skill y el comando
+./install --yes    # sin preguntas: skill en ~/.claude/skills, comando en ~/.local/bin
+```
+
+Al terminar, el instalador lista las herramientas que no encuentra y cómo conseguirlas. `./install --tools` instala las dos que vienen de npm: `playwright-cli` para capturar web y `agent-device` para capturar móvil. `ffmpeg` (para el video) y `claude` son opcionales.
+
+Otras opciones:
+
+```
+./install --symlink --skill-dir ~/.claude/skills --bin-dir ~/.local/bin     # enlaza el skill en vez de copiarlo
+./install --app                                                             # crea Flow Map.app en ~/Applications
 ./install --uninstall --skill-dir ~/.claude/skills --bin-dir ~/.local/bin
 ```
 
-Requisitos que el repo no trae: Python 3 (el CLI del skill), `playwright-cli` para capturar web, `agent-device` para capturar móvil y, opcionales, `ffmpeg` y `claude`. `./install` no instala ninguno por su cuenta: al terminar lista los que no encuentra en el PATH con el comando para conseguir cada uno, y `./install --tools` instala los dos que vienen de npm. Las peticiones de captura web desde la app usan `npx playwright screenshot`, que necesita el navegador descargado una vez (`npx playwright install chromium`).
+El comando guarda la ruta de `node` y la de este repo. Si mueves el repo o cambias de Node, ejecuta `./install` otra vez.
 
-El repo trae el skill en `skill/` (SKILL.md, scripts, references, tests); `./install` lo copia a `<carpeta de skills>/flow-map` (o lo enlaza con `--symlink`) y escribe el script `flow-map` en la carpeta de comandos, con las rutas absolutas de `node` y de este repo. Nunca pisa un archivo o carpeta que no sea suyo, y si la carpeta de comandos no está en el PATH imprime la línea que hay que añadir al perfil del shell (no lo edita). La app asume el skill en `~/.claude/skills/flow-map`: si lo instalas solo en otra carpeta, el instalador lo avisa. Si mueves el repo o cambias de Node, vuelve a ejecutar `./install`. Con el comando instalado, `flow-map` abre la app en tu navegador por defecto (la arranca si no corre y escribe la URL con su puerto), `flow-map open <carpeta>` abre un mapa ahí, `flow-map app [<carpeta>]` usa una ventana propia sin pestañas y `flow-map link <carpeta>` liga el mapa a la sesión. `Flow Map.app` es opcional y no se instala por defecto.
+Si quien instala es un agente, [`INSTALL.md`](INSTALL.md) tiene los pasos completos.
+
+## Uso
+
+Pídele a Claude Code un mapa («hazme el mapa de flujos del login») y el skill crea la carpeta. Luego:
+
+```
+flow-map open <carpeta>    # abre el mapa en el navegador
+flow-map app <carpeta>     # lo abre en una ventana propia (necesita Chrome, Edge, Brave o similar)
+flow-map                   # abre la app con los mapas recientes
+flow-map link <carpeta>    # liga el mapa a la sesión de Claude Code desde la que lo ejecutas
+```
+
+Con el mapa ligado, lo que escribas en el dock de la app llega a esa sesión. Sin sesión, el botón «Run with a new Claude» hace el trabajo con un `claude` aparte.
+
+## Limitaciones
+
+- Solo macOS. El selector de carpetas, las miniaturas y la ventana propia dependen de él, y no se ha probado en Linux ni Windows.
+- Cuando otro proceso cambia el mapa y la página se recarga, pierdes la selección y el modo de comparación. El texto a medio escribir se conserva.
+- El video de una ruta admite 30 pantallas como máximo y no lleva subtítulos.
 
 ## Desarrollo
 
-Node 24 ejecuta TypeScript directamente, sin paso de compilación.
+Node 24 ejecuta TypeScript directamente, así que no hay paso de compilación.
 
 ```
-npm install
-npm test            # vitest, una sola pasada
+npm test             # tests de la app
 npm run typecheck
-npm start
+npm start            # la app en el puerto 9999; PORT=<n> usa otro
+python3 -m unittest discover -s skill/tests    # tests del skill
 ```
 
-`npm start` arranca la app en el puerto 9999; `PORT=<n> npm start` usa otro (por ejemplo, para una instancia aislada junto a la tuya).
+El visor no tiene tests automáticos. `tools/viewer-check.ts` lo prueba en un navegador real contra un `claude` simulado: `PLAYWRIGHT_CORE=<ruta a playwright-core> node tools/viewer-check.ts`.
 
-Mapa de trabajo: sin ningún mapa abierto, `/` muestra el mapa de trabajo, una carpeta de mapa vacía (`<datos>/scratch/untitled`) que la app crea con el `init` del `skill/` de este repo. `/choose` siempre muestra el selector de mapas, con el mapa de trabajo primero (y lo crea si falta, sin abrirlo); nunca aparece en los recientes. Si su `map.json` está dañado, la app no lo toca: `/` muestra el selector con un aviso que dice el problema y qué carpeta borrar para empezar uno nuevo.
+## Más documentación
 
-Para abrir un mapa desde la terminal: `node src/cli.ts open <carpeta>` (la ruta puede ser relativa; `--no-browser` no abre el navegador). Si la app ya corre, el comando abre la carpeta en ella; si no, la arranca en segundo plano y luego abre el mapa. La app anuncia su puerto en `app.json` dentro de `$FLOW_MAP_HOME` mientras corre y lo borra al cerrarse. Si algo sale mal (carpeta que no es un mapa, la app no arranca en 5 s), el comando lo imprime y termina con código 1.
-
-Para usar Flow Map como una aplicación con su propia ventana: `node src/cli.ts app [<carpeta>]` arranca la app si no corre (igual que `open`, por `app.json`) y la abre en una ventana propia, sin barra ni pestañas del navegador. Usa el primer navegador basado en Chromium que encuentre, en este orden: Google Chrome, Chromium, Microsoft Edge, Brave y Vivaldi (en `/Applications`), lanzado con `open -n -a "<navegador>" --args --app=http://127.0.0.1:<puerto>/ --user-data-dir=$FLOW_MAP_HOME/window-profile`. El perfil `window-profile` es propio, así que la ventana es independiente y no toca tu perfil del navegador. Si no hay ninguno instalado, lo dice en una línea y abre la app en el navegador por defecto. Con `<carpeta>`, abre ese mapa en la app antes de mostrar la ventana.
-
-`node src/cli.ts install-app [--dir <carpeta>]` crea `Flow Map.app` en la carpeta (por defecto `~/Applications`), para abrirla desde Finder, Launchpad o Spotlight como cualquier otra app. El paquete es un script que ejecuta `flow-map app` con las rutas absolutas del `node` y del `src/cli.ts` de ese momento (y `FLOW_MAP_HOME` si estaba definida); el ícono se genera en código (`src/icon.ts`) y se convierte a `.icns` con `sips`, que viene con macOS. Reinstalar reemplaza el paquete anterior. **Vuelve a ejecutar `install-app` si actualizas o mueves `node`, o mueves este repo**: el paquete guarda esas rutas. Limitación: mientras corre, el Dock puede mostrar el ícono del navegador (modo app de Chrome); el ícono propio se ve en Finder, Launchpad y Spotlight. La ventana y el paquete solo existen en macOS y no están firmados.
-
-Para ligar un mapa a la sesión de Claude Code donde lo editas: `node src/cli.ts link <carpeta>`, ejecutado **desde dentro de esa sesión** (toma el socket y el token de las variables `CLAUDE_CODE_MESSAGING_SOCKET` y `CLAUDE_CODE_MESSAGING_TOKEN`). Guarda el vínculo en el directorio de datos de la app, `<datos>/sessions/<clave>.json` (la clave son los 32 primeros caracteres hexadecimales del sha256 de la ruta real de la carpeta), con permisos 600, y no escribe nada en la carpeta del mapa (ni `.gitignore`); ligar otra vez reemplaza el vínculo anterior. **Ese archivo es una credencial**: contiene el token de la sesión, no lo compartas. El vínculo vive fuera de la carpeta del mapa para que una carpeta de mapa (que puede llegar desde git) nunca lleve un token y para que las reglas de Read/Edit del worker sobre la carpeta no lo alcancen. **No** impide que un worker dirigido por texto hostil de un mapa lo copie con los comandos que la app le permite ejecutar (`flowmap.py ... --image/--tree <cualquier ruta>` y `npx playwright screenshot file://...` aceptan rutas fuera de la carpeta). Ese riesgo residual se acepta y lo acotan la regla de texto de una línea en los prompts, el aviso de aprobación para todo lo que pase de las reglas permitidas y que el worker solo corre a petición del diseñador. Un `session.json` antiguo dentro de la carpeta que sea un vínculo (objeto con `version` 1, `socket` y `token`) se borra al abrir el mapa y al ejecutar `link`; cualquier otro `session.json` se deja como está. El mapa aparece sin ligar hasta que vuelvas a ejecutar `link`. `GET /__flowmap-app/session` dice si el mapa abierto está ligado (`{ "linked": true, "socket": "<nombre del archivo>", "alive": true|false }` o `{ "linked": false }`) y nunca devuelve el token. `alive` indica si el socket acepta una conexión ahora: la app se conecta y cierra sin escribir nada (timeout de 1 s). Si falta alguna variable o la carpeta no es un mapa utilizable, el comando lo imprime, no escribe nada y termina con código 1.
-
-Disposición del visor (rediseño de 2026-11-07): una barra de 48 px (← Maps, título, conteos, búsqueda, Flows, zoom, Connections, Changes, Details), el lienzo a pantalla completa, un **dock** flotante abajo para hablar con Claude y un panel derecho de 400 px para la pantalla seleccionada. El dock tiene tres pestañas, «Change the map», «New screen» y «Capture now»; en un mapa sin pantallas abre en «New screen» y el lienzo muestra una tarjeta «Start your map». Mientras corre una ejecución, una tarjeta sustituye al dock (pasos, Cancel y aprobaciones); si falla ofrece «Try again» y «Dismiss». «Re-capture» y «Design contract» están en el panel derecho. La barra tiene un botón «Connections» (tecla E) que oculta/muestra las conexiones y se recuerda por navegador.
-
-Para pedirle un cambio a esa sesión desde la app: si el mapa está ligado, el visor muestra el dock (pestaña «Change the map»: texto y botón Send) que hace `POST /__flowmap-app/request` con `{ "text": "...", "screen": "<id opcional>" }`. El servidor escribe en el socket del vínculo la línea de autenticación y un mensaje de usuario con el texto, el título del mapa y la pantalla seleccionada, y responde `{ "sent": true }`. «Enviado» significa solo que el socket aceptó la conexión y se escribieron las dos líneas: la sesión no responde, y la app no distingue si retuvo o rechazó el mensaje ([`ai_docs/socket-de-sesion.md`](ai_docs/socket-de-sesion.md)). Errores: `409` si el mapa no está ligado o la sesión está cerrada (socket ausente, conexión rechazada o sin respuesta en 3 s), `400` si el texto está vacío, pasa de 20 000 caracteres o la pantalla no existe en el mapa, `403` sin `X-Flowmap: 1` o desde otro origen, y `429` con `Retry-After` si se aceptan más de 5 peticiones en una ventana de 10 s (opción `requestWindowMs` de `createServer`). El cuerpo de un error nunca incluye el token.
-
-En el dock el visor muestra un chip «Session linked» o «Session gone» (consulta `/session` cada ~10 s, no mientras la pestaña está oculta, y justo después de un `409` al enviar) y un botón «How to set this up». Este lee `GET /__flowmap-app/session-help` (`{ "settings": "<JSON para settings.json>", "steps": ["..."] }`; `404` sin mapa abierto), que explica cómo poner `"crossSessionInbound": "accept"` y reglas de permiso `Read`/`Edit` sobre la carpeta del mapa y `Bash` para los comandos del skill, sin token ni ruta del socket. La app solo muestra las instrucciones: nunca escribe los ajustes del usuario ([ADR 0002](ai_docs/adr/0002-la-app-no-toca-los-ajustes-de-claude.md)).
-
-Si no hay una sesión abierta («Session gone»), el visor ofrece el botón «Run with a new Claude»: hace `POST /__flowmap-app/request` con `"via": "worker"` (misma validación, mismas cabeceras y mismo límite de 5 peticiones por ventana que las peticiones a la sesión; no necesita que el mapa esté ligado) y el servidor arranca un `claude -p` sin interfaz en la carpeta del mapa (`claude -p <texto> --output-format stream-json --verbose --allowedTools <reglas>`; el comando es la opción `claudeBin`, por defecto `claude`). Responde `202 { "runId": "...", "via": "worker" }`, y `GET /__flowmap-app/runs/<runId>` devuelve `{ "state": "running" | "needs-approval" | "done" | "failed", "events", "denials"?, "result"?, "error"? }` (`404` si el id no existe); el visor lo consulta cada 2 s. **Usa tu propio inicio de sesión de Claude Code**: la app no guarda ninguna clave ni usa `--bare`, y si `ANTHROPIC_API_KEY` está en el entorno donde corre la app, el proceso hijo la hereda y la usa. Solo recibe las reglas de permiso que ya genera «How to set this up» (`Read`/`Edit` sobre la carpeta del mapa y `Bash` para el comando del skill); lo demás se deniega sin preguntar, y nunca se pasa `--dangerously-skip-permissions` ni un modo de permisos que lo omita. Al proceso hijo se le quitan `CLAUDE_CODE_MESSAGING_TOKEN` y `CLAUDE_CODE_MESSAGING_SOCKET`. Solo corre una ejecución a la vez (`409` si hay otra en curso; una rechazada no gasta el límite de peticiones), la opción `workerTimeoutMs` (10 minutos por defecto) la detiene si tarda demasiado, cerrar la app mata la ejecución en curso, y las ejecuciones viven solo en memoria. Para detener una ejecución en curso o que espera una decisión, `POST /__flowmap-app/runs/<runId>/cancel` (misma guarda y mismo alcance por mapa que `/decision`) la mata y la deja como `failed` con «Cancelled by the designer.»; el visor muestra un botón «Cancel» mientras corre. Responde `404` si el id no existe y `409` si ya terminó.
-
-Progreso y permisos del worker: `events` trae las últimas 50 entradas de lo que hace Claude, `{ "kind": "text", "text" }` (hasta 300 caracteres) o `{ "kind": "tool", "name", "summary" }` (comando o ruta, hasta 200), y ya están ahí mientras la ejecución sigue en `running`; el visor muestra las últimas cinco. Si Claude termina porque una herramienta no estaba permitida (en `-p` se deniega sin preguntar), la ejecución pasa a `needs-approval` y conserva el turno del worker; `denials` es `[{ "tool", "summary", "rule" }]`, donde `rule` es la regla mínima que permitiría exactamente esa llamada (`Bash(<comando exacto>)`, `Read(//<ruta>)` o `Edit(//<ruta>)` —también para `Write`—, con los caracteres especiales de la ruta escapados, o el nombre de la herramienta si no tiene argumentos) o `null` si la app no puede ofrecer una (no se aprueba desde la app). El id de sesión de Claude no sale en ninguna respuesta. `POST /__flowmap-app/runs/<runId>/decision` (misma guarda `X-Flowmap` + mismo origen) acepta `{ "allow": true, "rules": ["<regla>"] }` solo para una ejecución en `needs-approval` (`409` si no, `404` si no existe) y solo con reglas que esa ejecución sugirió (`400` si no, sin arrancar nada): reanuda la misma conversación con `claude -p "Permission granted for: <reglas>…" --resume <sesión> --allowedTools <las reglas de la ejecución + las aprobadas>`, responde `202 { "runId" }` y la ejecución vuelve a `running` con el mismo id (si acaba con nuevas denegaciones, vuelve a `needs-approval`). `{ "allow": false }` la termina como `done` con «Denied by the designer.», responde `200` y libera el turno. **Una aprobación solo vale para esa ejecución**: no se guarda ni afecta a otras, y la app nunca cambia los ajustes de Claude Code ([ADR 0002](ai_docs/adr/0002-la-app-no-toca-los-ajustes-de-claude.md)). Reanudar no gasta el límite de peticiones, y el límite de tiempo (`workerTimeoutMs`) cuenta por cada proceso y no corre mientras se espera la decisión. En el visor, cada denegación con regla tiene una casilla (desmarcada por defecto) y los botones «Allow selected and continue» y «Deny».
-
-Adjuntar comentarios: `POST /__flowmap-app/request` (a la sesión o con `"via": "worker"`) acepta `"attach": true`. El mensaje (o el prompt del worker) lleva entonces, tras el texto de la petición, el mismo texto que `GET /__flowmap/export` (rutas absolutas de los recortes y de la pantalla incluidas): solo los comentarios de `screen` si se indica, y los de todo el mapa si no. Si el mapa no tiene comentarios no se añade nada y no es un error; `attach` que no sea booleano responde `400`. Aparte de `attach`, cuando se indica `screen` el mensaje nombra la ruta absoluta de la captura completa de esa pantalla (`Full capture of the selected screen: ...`), para que Claude la abra con `Read`. No se adjuntan los bytes de ninguna imagen, solo rutas. En el dock la casilla «Attach my comments» viene marcada si el mapa tiene comentarios y su estado se envía como `attach` tanto con Send como con «Run with a new Claude».
-
-Pedir una pantalla nueva: `POST /__flowmap-app/new-screen` con `{ "title", "description"?, "from"?, "action"?, "via"?: "worker" }` (`src/new-screen.ts`). La app **no crea la pantalla**: arma un prompt y lo entrega igual que `/request` (a la sesión ligada, o con `"via": "worker"` al `claude -p` propio; misma guarda, mismo límite de 5 por ventana, misma regla de una ejecución a la vez y mismas respuestas: `{ "sent": true }` o `202 { "runId", "via" }`). El prompt lleva el id nuevo (slug del título, único en el mapa con `-2`, `-3`...), la ruta absoluta de la captura de la pantalla de origen y de hasta 2 vecinas de su flujo, la carpeta `screens-src/`, el tamaño de viewport (el de la pantalla de origen; si no, 390x844 en ios/android y 1440x900 en web) y la línea exacta de `flowmap.py add`. Claude escribe un mock HTML autocontenido en `screens-src/<id>.html`, lo renderiza con `npx playwright screenshot` a `screens-src/<id>.png` y lo registra con el skill. Errores: `400` si el título está vacío o pasa de 120 caracteres, la descripción de 4 000, la acción de 200, `from` no existe en el mapa (o su captura falta) o `via` no es `"worker"`; `403` y `409` como `/request`. Las ejecuciones del worker de esta ruta reciben una regla más, `Bash(npx playwright screenshot *)`; **en la sesión ligada rigen los permisos de la propia sesión**: puede que la terminal te pida permitir el comando de captura. En el visor, la pestaña «New screen» del dock envía esto (con `"via": "worker"` si el chip dice «Session gone»).
-
-Capturar ahora una pantalla nueva: `POST /__flowmap-app/capture` con `{ "title", "from"?, "action"?, "note"?, "via"?: "worker" }` (`src/capture-new.ts`). Como con la recaptura, la app **no captura nada**: arma el prompt (id nuevo único, plataforma y cómo capturar —`agent-device` en móvil, `npx playwright screenshot` en web, pidiendo la URL si la nota no la trae—, ruta absoluta `screens-src/<id>.capture.png`, la línea exacta de `flowmap.py add` con el flujo de `from` o el de la entrada, y la orden de no registrarla si está en blanco, recortada, en error/carga o repetida) y lo entrega igual que `/request`, con las mismas guardas, límites y respuestas. En el visor, el botón «Capture it now» junto a «Ask for the screen».
-
-Adjuntar imágenes: `/request` acepta `"images"`: hasta 3 data URLs `image/png` o `image/jpeg` de como máximo 5 MB cada una, validadas por su firma real. Se guardan en `temp/attachments/` de la carpeta del mapa (con archivo temporal y `rename`; un `temp` que sea un enlace simbólico se rechaza) y el mensaje o prompt lista sus rutas absolutas para que Claude las abra con `Read`; los bytes no viajan en el mensaje. Una imagen inválida responde `400` y no guarda ni entrega nada. En el visor, pegar una imagen en el dock muestra una miniatura con una × para quitarla; Send y «Run with a new Claude» la envían y se vacía al terminar.
-
-Pedir recapturar una pantalla: `POST /__flowmap-app/recapture` con `{ "screen": "<id>", "note"?: "<hasta 500 caracteres>", "via"?: "worker" }` (`src/recapture.ts`). Como con la pantalla nueva, la app **no captura nada**: arma un prompt y lo entrega igual que `/request` (misma guarda, mismo límite de 5 por ventana, misma regla de una ejecución a la vez y mismas respuestas: `{ "sent": true }` o `202 { "runId", "via" }`). El prompt lleva el id y el título de la pantalla, la ruta absoluta de su captura actual, la plataforma del mapa y cómo capturar según ella (`ios`/`android`: con el CLI `agent-device` en el simulador o emulador, y opcionalmente `--tree` con el árbol de `agent-device snapshot`; `web`: con `npx playwright screenshot --viewport-size=<ancho>,<alto>` al tamaño de la pantalla, pidiendo la URL al diseñador si la nota no la trae), la nota del diseñador tal cual, la línea exacta de `flowmap.py update <carpeta> --id <id> --image <carpeta>/screens-src/<id>.recapture.png` (ruta absoluta; el skill guarda el «antes» en `history/` para Before | After) y la orden de abrir con `Read` la captura vieja y la nueva y terminar con una línea que informe del JSON (`changed`, `similarity`). Errores: `400` si `screen` falta, está vacía o no existe en el mapa, si su captura falta en la carpeta, si `note` no es texto o pasa de 500 caracteres o si `via` no es `"worker"`; `403`, `404` y `409` como `/request` (y `404` sin mapa abierto). El worker recibe las mismas reglas que en «New screen» (carpeta, `flowmap.py` y `npx playwright screenshot`); **no recibe reglas de `agent-device`**, así que para mapas móviles conviene la sesión ligada, donde rigen los permisos de la propia sesión. En el visor, el botón «Re-capture» del panel derecho (con una nota opcional) aparece cuando el mapa está ligado y hay una pantalla seleccionada.
-
-Contrato de diseño y estados: el contrato de diseño de un mapa (colores, tipografía, espaciado, componentes) es el archivo `DESIGN.md` en la carpeta del mapa; es del diseñador y puede subirse a git junto con el mapa. `GET /__flowmap-app/design` responde `{ "exists": boolean, "text": string }` (`404` sin mapa abierto) y `PUT /__flowmap-app/design` con `{ "text": "..." }` lo escribe (archivo temporal y `rename`, misma guarda `X-Flowmap` y origen que las demás escrituras; `400` si `text` no es texto o pasa de 50 000 caracteres; un texto vacío borra el archivo) y responde `{ "exists": boolean }`. La app no valida su contenido. En el visor, la sección «Map settings · Design contract» del panel derecho lo edita. Cuando existe, el prompt de «New screen» lo incluye entero bajo «Design contract of this map» y le dice a Claude que lo siga por encima de copiar a las vecinas; si no existe, le dice que no hay contrato y que deduzca el aspecto de las capturas vecinas. Además el prompt pide cuatro estados: **un** HTML autocontenido en `screens-src/<id>.html` cuyo estado se elige con `#state=normal|empty|loading|error`, una captura por estado (`screens-src/<id>.png` para `normal` y `screens-src/<id>.<estado>.png` para los demás) y cuatro líneas `flowmap.py add`, en orden: `normal` con id `<id>` (desde la pantalla de origen, como antes) y `<id>-empty`, `<id>-loading`, `<id>-error` en el mismo flujo, cada una con `--from <id> --action "state: <estado>"`. Por último, Claude debe abrir cada PNG con `Read`, comprobar que no esté en blanco ni recortado, comparar el estado `normal` con las capturas vecinas y terminar su respuesta con un informe de verificación de una línea por estado.
-
-Copiar la captura de la pantalla seleccionada: en el detalle de una pantalla, el botón «Copy screenshot» pone su captura en el portapapeles como `image/png` (un JPEG se convierte con un canvas), lista para pegarla en Claude. Si el navegador bloquea el portapapeles, el visor muestra la ruta absoluta de la captura con un botón «Copy path» (y, si tampoco puede copiar texto, la ruta queda seleccionable), porque Claude Code puede leer una ruta con `Read`. La ruta sale de `GET /__flowmap-app/capture-path?screen=<id>`, que responde `{ "path": "<ruta real absoluta>" }` (`src/capture-path.ts`); `404 { "error" }` sin mapa abierto y `400 { "error" }` si falta `screen`, no existe en el mapa o su captura no está en disco. Una captura cuyo `image` sale de la carpeta del mapa (`../x.png` o un enlace simbólico hacia fuera) se trata como inexistente: `/request` con `screen`, `/new-screen` (`from`) y `/recapture` responden `400` y no entregan nada, y las vecinas que salen de la carpeta se omiten del prompt de «New screen». Solo se copia la captura de la pantalla, no una región del mapa.
-
-Pantallas HTML: una pantalla que Claude maquetó como HTML tiene **dos archivos**: el HTML (la fuente, autocontenido: CSS, JS y datos en línea, sin red) y su PNG renderizado, que sigue siendo el `image` de `map.json` para que el lienzo, los comentarios, Antes | Después y las miniaturas funcionen igual que con cualquier captura. La pantalla lleva además el campo opcional `"html": "screens-src/<id>.html"` (ruta relativa a la carpeta del mapa que termina en `.html`; aditivo, `version` sigue en 1). `src/map-check.ts` lo valida: si no es texto, es absoluto, tiene un segmento `..` o no termina en `.html`, el mapa no es utilizable (`400` al abrirlo, y el motivo nombra la pantalla); una pantalla sin `html` no cambia. En el detalle, una pantalla con `html` muestra el botón «Capture | HTML» (por defecto, Capture): HTML la enseña viva en un `<iframe sandbox="allow-scripts">` (nunca `allow-same-origin`), escalada a la caja de la captura, con la nota «Live HTML. Comments and Before|After use the capture.»; al comparar o al comentar vuelve a la captura, y si el archivo no se puede servir muestra «HTML not available». El servidor sirve `.html` solo desde `screens/` y `screens-src/` (en `thumbs/`, `history/` y `baselines/` responde `404`) con `Content-Security-Policy: sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:`, `X-Content-Type-Options: nosniff` y `Cache-Control: no-store`: el `sandbox` del CSP hace del documento un origen opaco sin red, de modo que ni abriéndolo directamente en una pestaña alcanza los endpoints de la app. Todos los archivos que sirve la app (también las capturas) se comprueban con `realpath`: un enlace simbólico que sale de la carpeta del mapa responde `404`. La carpeta `screens-src/` no la vigila el visor para la recarga en vivo (la recarga la dispara el `map.json` que actualiza `flowmap.py add`); editar el HTML y renderizar el PNG desde la app, y `add --html` en el skill, quedan fuera de esta historia.
-
-Historial de una pantalla: el skill debe guardar **cada** captura anterior de una pantalla como `history/<id>/<YYYYMMDDTHHMMSSZ>.<png|jpg|jpeg>`, donde el nombre es la hora UTC compacta en que se tomó esa captura (si dos caen en el mismo segundo, la posterior lleva `-2`, `-3`... antes de la extensión). La app solo lee esa convención (`src/history.ts`), nunca escribe ni poda el historial; mientras el skill siga guardando un solo «antes» en `history/<id>.png`, ese archivo no cuenta como versión y ninguna pantalla muestra historial. `GET /__flowmap-app/history?screen=<id>` responde `{ "versions": [{ "capturedAt", "image", "current" }] }`, la más nueva primero: la primera es la captura actual del `map.json` (`current: true`) y le siguen los archivos de `history/<id>/` con nombre válido (otros archivos, subcarpetas y enlaces simbólicos que salen de la carpeta se ignoran). `GET /__flowmap-app/changes` responde `{ "events": [{ "screen", "title", "capturedAt", "image", "current" }] }`: todas las versiones de todas las pantallas, la más nueva primero (las que no tienen fecha, al final y en el orden del mapa), con un máximo de 200. Todas las fechas salen en UTC ISO con `Z` y sin milisegundos (`2026-10-29T12:23:17Z`); una ausente o ilegible es `null`. Ambas dan `404 { "error" }` sin mapa abierto y `400 { "error" }` (la primera) si `screen` no existe; las imágenes se sirven por `/history/<id>/<archivo>` con la misma comprobación de `realpath` que el resto. En el detalle, la fila «History» (solo si hay más de una versión) muestra un botón por versión con su fecha, ver una versión vieja usa el sitio del «antes» y «Compare with current» la pone junto a la actual; el botón «Changes» de la cabecera lista todas las capturas con miniatura y abre la pantalla (y esa versión si no es la actual).
-
-Los mapas recientes se guardan en `recents.json` dentro de `$FLOW_MAP_HOME` (por defecto `~/.flow-map`).
-
-`src/viewer/viewer.html` es una copia del visor del skill `/flow-map`, tomada el 2026-11-05. Desde ahí evoluciona por su cuenta: los cambios del visor del skill no llegan solos ([ADR 0001](ai_docs/adr/0001-app-y-skill-separados.md)).
-
-## Verificar el visor
-
-El visor no tiene tests automáticos. `tools/viewer-check.ts` lo prueba en un navegador real contra un `claude` de mentira (`PLAYWRIGHT_CORE=<ruta a playwright-core> node tools/viewer-check.ts`); no forma parte de `npm test` porque necesita Playwright y un Chromium instalado.
+- [`ai_docs/referencia.md`](ai_docs/referencia.md): rutas HTTP, archivos que escribe la app, límites y errores.
+- [`skill/references/schema.md`](skill/references/schema.md): el formato de la carpeta de un mapa y los comandos del skill.
+- [`ai_docs/GLOSSARY.md`](ai_docs/GLOSSARY.md): el vocabulario del proyecto.

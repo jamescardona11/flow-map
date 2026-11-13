@@ -1,6 +1,6 @@
 # Instalar y usar Flow Map (instrucciones para un agente)
 
-Este archivo es para un agente (Claude Code u otro) al que su usuario le pide instalar Flow Map y dejarlo funcionando. Para trabajar *en* el código del repo, lee [`AGENTS.md`](AGENTS.md). La referencia completa de cada parte está en [`README.md`](README.md).
+Este archivo es para un agente (Claude Code u otro) al que su usuario le pide instalar Flow Map y dejarlo funcionando. Para trabajar *en* el código del repo, lee [`AGENTS.md`](AGENTS.md). El detalle de cada parte está en [`ai_docs/referencia.md`](ai_docs/referencia.md).
 
 Flow Map son dos piezas que solo comparten una carpeta en disco (la carpeta del mapa):
 
