@@ -1,0 +1,4 @@
+#!/usr/bin/env node
+import { runInstaller } from "./src/installer.ts";
+
+process.exitCode = await runInstaller(process.argv.slice(2));

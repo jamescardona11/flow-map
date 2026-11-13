@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+__pycache__/
+*.pyc
+.scratch/
+session.json
+ai_docs/plan/
+ai_docs/ui-redesign/

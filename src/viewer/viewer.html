@@ -1,0 +1,2071 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flow map</title>
+<link rel="icon" type="image/png" href="/favicon.png">
+<style>
+  :root { --bg:#0b0d10; --panel:#12161b; --panel2:#181e25; --line:#252c35; --line2:#333d49; --fg:#eef1f4; --muted:#9aa5b1; --edge:#c9d3dc; --warn:#e8b04a; --accent:#8cc4ee; --accent-ink:#06121c; --danger:#ef7a70; --raise:#1d242d; --ok:#6fcf97; --bar-h:48px; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 -apple-system,"Helvetica Neue",sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+  button, select { font:inherit; font-size:13px; color:var(--fg); background:var(--panel2); border:1px solid var(--line2); border-radius:8px; padding:0 12px; height:32px; cursor:pointer; transition:background .12s, border-color .12s; }
+  button:hover:not(:disabled) { background:#202833; border-color:var(--accent); }
+  button:disabled { opacity:.4; cursor:default; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  button.pri { background:var(--accent); color:var(--accent-ink); border-color:transparent; font-weight:600; }
+  button.pri:hover:not(:disabled) { background:#a8d6f5; }
+  button.ghost { background:transparent; border-color:transparent; color:var(--muted); padding:0 8px; height:28px; }
+  button.ghost:hover:not(:disabled) { background:var(--panel2); color:var(--fg); border-color:transparent; }
+  button.ghost.danger:hover:not(:disabled) { color:var(--danger); }
+  button.active { border-color:var(--warn); color:var(--warn); background:rgba(232,176,74,.12); }
+  kbd { font:600 11px ui-monospace,Menlo,monospace; color:var(--muted); background:var(--bg); border:1px solid var(--line2); border-bottom-width:2px; border-radius:5px; padding:0 5px; margin-left:4px; }
+  header { flex:none; min-height:48px; padding:7px 16px; display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; background:var(--panel); border-bottom:1px solid var(--line); position:relative; z-index:20; }
+  header h1 { font-size:15px; font-weight:650; margin:0; min-width:0; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #chooseMap { flex:none; color:var(--muted); font-size:13px; text-decoration:none; white-space:nowrap; }
+  #chooseMap:hover { color:var(--fg); }
+  #chooseMap:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  #legend, #sub { flex:none; max-width:100%; overflow:hidden; text-overflow:ellipsis; color:var(--muted); font-size:12px; line-height:20px; padding:0 9px; border:1px solid var(--line2); border-radius:999px; white-space:nowrap; }
+  #legend:empty, #sub:empty { display:none; }
+  #blocks { position:fixed; top:calc(var(--bar-h) + 8px); left:16px; z-index:12; max-width:min(520px, calc(100vw - 32px)); background:var(--panel); border:1px solid rgba(232,176,74,.5); border-radius:12px; padding:4px 12px; color:var(--warn); font-size:12px; cursor:pointer; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  #blocks.open { display:block; }
+  .tools { margin-left:auto; min-width:0; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; align-items:center; }
+
+  /* ---- the Claude dock: one floating card at the bottom of the window, centred in the area the drawer leaves free ---- */
+  :root { --dock-right:0px; }
+  body:has(#nav:not([hidden])) { --dock-right:400px; }
+  #ask, #runCard { position:fixed; bottom:20px; left:0; right:var(--dock-right); margin:0 auto; z-index:14; width:min(760px, calc(100vw - var(--dock-right) - 32px)); background:var(--panel); border:1px solid var(--line2); border-radius:16px; box-shadow:0 18px 48px rgba(0,0,0,.55); }
+  #runCard:not([hidden]) + #ask { display:none; }
+  #dockTop { display:flex; align-items:center; gap:8px; padding:8px 8px 0 10px; }
+  #dockTabs { display:flex; gap:2px; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:2px; }
+  #dockTabs button { white-space:nowrap; height:28px; border:0; background:transparent; color:var(--muted); border-radius:8px; padding:0 12px; }
+  #dockTabs button:hover:not(:disabled) { background:transparent; color:var(--fg); }
+  #dockTabs button[aria-selected=true] { background:var(--raise); color:var(--fg); box-shadow:inset 0 0 0 1px var(--line2); }
+  .spacer { flex:1; }
+  #askState { display:inline-flex; align-items:center; gap:6px; height:22px; padding:0 9px; border:1px solid var(--line2); border-radius:999px; font-size:12px; color:var(--muted); white-space:nowrap; }
+  #askState::before { content:''; width:7px; height:7px; border-radius:50%; background:currentColor; }
+  #askState.ok { color:var(--ok); border-color:rgba(111,207,151,.45); }
+  #askState.warn { color:var(--warn); border-color:rgba(232,176,74,.5); }
+  #askHelpWrap { position:relative; }
+  #askHelpBtn { width:28px; height:28px; padding:0; }
+  #askHelp { position:absolute; bottom:calc(100% + 8px); right:0; width:340px; max-width:calc(100vw - 32px); background:var(--panel); border:1px solid var(--line2); border-radius:12px; padding:12px; font-size:12px; color:var(--muted); box-shadow:0 18px 48px rgba(0,0,0,.55); }
+  #askHelp ol { margin:0; padding-left:18px; }
+  #askHelp pre { margin:8px 0 0; padding:8px 10px; overflow:auto; white-space:pre-wrap; font:11px ui-monospace,Menlo,monospace; color:var(--fg); background:var(--bg); border:1px solid var(--line2); border-radius:8px; }
+  .dockPane { padding:10px; display:flex; flex-direction:column; gap:8px; }
+  .dockLine { display:flex; gap:8px; align-items:flex-end; }
+  #ask input[type=text], #ask textarea { display:block; width:100%; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--bg); border:1px solid var(--line2); border-radius:8px; padding:0 12px; height:32px; }
+  #ask textarea { padding:8px 12px; height:auto; resize:none; line-height:1.45; }
+  #askText { flex:1; }
+  #askSend { height:56px; min-width:76px; }
+  .dockOpts { display:flex; align-items:center; flex-wrap:wrap; gap:10px; color:var(--muted); font-size:12px; }
+  .dockGrid { display:flex; flex-wrap:wrap; gap:8px; }
+  .dockGrid .field { flex:1 1 calc(50% - 4px); min-width:0; }
+  .dockGrid .full { flex-basis:100%; }
+  .field > span { display:block; font-size:11px; color:var(--muted); margin:0 0 4px 2px; }
+  label.tog { position:relative; display:inline-flex; align-items:center; height:32px; padding-left:24px; cursor:pointer; white-space:nowrap; }
+  label.tog input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; }
+  label.tog i { position:absolute; left:2px; top:8px; width:16px; height:16px; border-radius:5px; border:1px solid #5a6a7c; background:var(--bg); }
+  label.tog input:checked + i { background:var(--accent); border-color:var(--accent); }
+  label.tog input:checked + i::after { content:''; position:absolute; left:4px; top:1px; width:4px; height:8px; border:solid var(--accent-ink); border-width:0 2px 2px 0; transform:rotate(45deg); }
+  label.tog input:focus-visible + i { outline:2px solid var(--accent); outline-offset:2px; }
+  label.tog input:disabled + i { opacity:.45; }
+  #askMsg { color:var(--muted); font-size:12px; min-width:0; white-space:pre-wrap; }
+  #askMsg:empty::before { content:'Paste a screenshot to attach it'; }
+  #askAttachBtn { width:32px; height:32px; padding:0; font-size:18px; }
+  #askImages { display:flex; flex-wrap:wrap; gap:8px; }
+  #askImages .thumb { position:relative; }
+  #askImages img { display:block; height:56px; max-width:120px; object-fit:cover; border:1px solid var(--line2); border-radius:6px; }
+  #askImages .thumb button { position:absolute; isolation:isolate; top:-9px; right:-9px; width:24px; height:24px; padding:0; line-height:22px; background:none; border:0; }
+  #askImages .thumb button::before { content:''; position:absolute; inset:3px; z-index:-1; border:1px solid var(--line2); border-radius:50%; background:var(--panel2); }
+  #askImages .thumb button:hover::before { border-color:var(--accent); background:#202833; }
+  #runCard { max-height:calc(100vh - 120px); overflow:auto; }
+  #runHead { display:flex; align-items:center; gap:10px; padding:10px 12px; }
+  #runHead b { font-size:13px; flex:none; }
+  #runCard.fail { border-color:rgba(239,122,112,.6); }
+  #runCard.fail .spin { display:none; }
+  #runCard.fail #runTitle { color:var(--danger); }
+  #runCard.fail #runMsg { color:var(--fg); white-space:normal; overflow:visible; }
+  #runMsg { flex:1; min-width:0; color:var(--muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .spin { flex:none; width:14px; height:14px; border-radius:50%; border:2px solid var(--line2); border-top-color:var(--accent); animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion:reduce) { .spin { animation:none; } }
+  #runEvents { margin:0; padding:8px 12px; border-top:1px solid var(--line); font:11px ui-monospace,Menlo,monospace; color:var(--muted); white-space:pre-wrap; }
+  #runApproval { margin:4px 12px 12px; padding:12px; display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--fg); border:1px solid rgba(232,176,74,.55); background:rgba(232,176,74,.07); border-radius:12px; }
+  #runApproval label { display:flex; gap:6px; align-items:flex-start; }
+  #runApproval .actions { display:flex; gap:8px; }
+  #designContract { font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:var(--panel2); }
+  #designContract summary { cursor:pointer; font-size:13px; }
+  #designBody { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-start; margin-top:6px; }
+  #designText { flex:1 1 100%; font:inherit; font-size:13px; color:var(--fg); background:var(--bg); border:1px solid var(--line2); border-radius:8px; padding:6px 12px; min-width:0; }
+  #designHint { flex-basis:100%; margin:0; }
+  #recapture { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  #rcNote { flex:1 1 240px; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--bg); border:1px solid var(--line2); border-radius:8px; padding:0 12px; height:32px; }
+  #nav #rcHint { flex-basis:100%; font-size:12px; }
+  #mapChanged { position:fixed; top:calc(var(--bar-h) + 12px); left:50%; transform:translateX(-50%); z-index:19; display:flex; gap:10px; align-items:center; background:var(--panel); border:1px solid rgba(232,176,74,.55); color:var(--warn); border-radius:999px; padding:6px 8px 6px 14px; font-size:13px; box-shadow:0 12px 32px rgba(0,0,0,.5); }
+  /* El mapa es un lienzo infinito: nada hace scroll, el mundo se mueve con translate + scale. Los puntos del fondo los mueve applyView(). */
+  #view { flex:1; overflow:hidden; position:relative; cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none;
+    background-color:var(--bg); background-image:radial-gradient(circle, #28303a 1.3px, transparent 1.5px);
+    background-size:28px 28px; }
+  #view.grabbing, #view.grabbing * { cursor:grabbing !important; }
+  #canvas { position:absolute; left:0; top:0; transform-origin:0 0; }
+  #canvas img { -webkit-user-drag:none; pointer-events:none; }
+  #hint { position:absolute; right:16px; bottom:12px; max-width:300px; color:var(--muted); font-size:12px; pointer-events:none; background:rgba(11,13,16,.72); padding:4px 10px; border-radius:12px; }
+  #zoomGroup { flex:none; display:flex; align-items:center; height:32px; border:1px solid var(--line2); border-radius:999px; background:var(--panel2); }
+  #zoomGroup button { height:30px; padding:0 10px; border:0; border-radius:999px; background:none; }
+  #zoomGroup button:hover:not(:disabled) { background:#202833; }
+  #zlabel { align-self:stretch; display:flex; align-items:center; justify-content:center; min-width:42px; text-align:center; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+  #empty { position:absolute; left:calc((100% - var(--dock-right)) / 2); top:38%; transform:translate(-50%, -50%); width:min(560px, calc(100% - var(--dock-right) - 32px)); padding:24px; text-align:center; color:var(--muted); cursor:default; user-select:text; -webkit-user-select:text; }
+  #empty h2 { margin:0 0 8px; font-size:22px; line-height:1.3; color:var(--fg); }
+  #empty p { margin:0 0 16px; font-size:14px; line-height:1.5; }
+  #empty .examples { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-bottom:20px; }
+  #empty .examples button { border-radius:999px; }
+  #empty .where { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px; font-size:12px; }
+  #empty .shotpath { display:inline-block; margin:0; padding:4px 8px; font:12px ui-monospace,Menlo,monospace; color:var(--fg); background:var(--panel); border:1px solid var(--line2); border-radius:8px; }
+  #empty a { display:inline-flex; align-items:center; height:24px; color:var(--accent); }
+  svg { position:absolute; left:0; top:0; overflow:visible; pointer-events:none; }
+  .zone { position:absolute; font-size:12px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; }
+  .node { position:absolute; padding:0; height:auto; border:0; background:none; text-align:left; border-radius:0; cursor:pointer; touch-action:none; }
+  .node:hover:not(:disabled) { background:none; }
+  .node.dragging { z-index:6; cursor:grabbing; }
+  .node.dragging img { box-shadow:0 18px 48px rgba(0,0,0,.65); }
+  .node .pair { display:flex; gap:14px; }
+  .node .half { display:block; flex:1; min-width:0; position:relative; }
+  .node .half .cap { position:absolute; left:8px; top:8px; z-index:1; font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#fff; background:rgba(0,0,0,.62); border-radius:6px; padding:2px 7px; }
+  .node .half:first-child img { filter:saturate(.75) brightness(.92); }
+  .node .tag { font-size:12px; height:22px; font-weight:600; white-space:nowrap; display:flex; gap:5px; align-items:baseline; color:var(--fg); }
+  .node .tag b { overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .node .tag span { color:var(--muted); font-weight:400; flex:none; }
+  .node .tag .pill { margin-left:auto; }
+  .node img { display:block; background:#000; border-radius:10px; border:2px solid var(--c); object-fit:contain; width:100%; }
+  .node:hover img, .node.cur img { filter:brightness(1.15); box-shadow:0 0 0 3px var(--c); }
+  .node.dim { opacity:.18; }
+  .node.picked img { outline:3px solid var(--accent); outline-offset:4px; }
+  .group { position:absolute; z-index:-1; pointer-events:none; border:2px dashed var(--line2); border-radius:16px; background:rgba(140,196,238,.05); }
+  .group-label { position:absolute; left:12px; top:8px; display:flex; gap:6px; align-items:center; pointer-events:auto; font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); }
+  #groupForm { display:flex; gap:6px; align-items:center; }
+  #groupName { font:inherit; font-size:13px; color:var(--fg); background:var(--bg); border:1px solid var(--line2); border-radius:8px; padding:0 10px; height:32px; width:150px; }
+  #groupMsg { color:var(--warn); font-size:12px; }
+  .pill { display:inline-block; background:var(--warn); color:#000 !important; border-radius:8px; padding:0 6px; font-size:10px; font-weight:700 !important; }
+  .apill { background:var(--accent); }
+  .lab { position:absolute; z-index:2; transform:translate(-50%,-50%); font-size:12px; line-height:1.3; background:var(--bg); border:1px solid var(--line2); border-radius:6px; padding:3px 8px; max-width:180px; text-align:center; }
+  button.lab { height:auto; cursor:pointer; color:var(--fg); }
+  button.lab:hover { border-color:var(--accent); background:#161c23; }
+  .no-edges #svg > path:not(.front), .no-edges .lab:not(.f) { display:none; }  /* Connections off: the unexplored stubs are not connections yet */
+  #edgesBtn[aria-pressed=false] { border-color:var(--warn); color:var(--warn); }
+  path.hit { pointer-events:stroke; cursor:pointer; }
+  path.hit:hover { stroke:rgba(140,196,238,.25); }
+  .node.flash img { animation:flash 1.4s ease-out; }
+  @keyframes flash { 0%,35% { box-shadow:0 0 0 6px var(--accent), 0 0 30px 8px rgba(140,196,238,.6); } 100% { box-shadow:0 0 0 0 transparent; } }
+  .lab.f { transform:translate(0,-100%); text-align:left; color:var(--warn); border-style:dashed; border-color:var(--warn); }
+  input[type=search] { font:inherit; font-size:13px; color:var(--fg); background:var(--bg); border:1px solid var(--line2); border-radius:8px; padding:0 12px; height:32px; width:230px; }
+  .pop { position:fixed; top:calc(var(--bar-h) + 10px); right:16px; width:min(460px, calc(100vw - 32px)); max-height:65vh; overflow:auto; background:var(--panel); border:1px solid var(--line2); border-radius:12px; padding:8px; z-index:20; box-shadow:0 12px 36px rgba(0,0,0,.55); }
+  .fl { display:flex; gap:8px; align-items:center; padding:5px 6px; cursor:pointer; border-radius:6px; }
+  .fl:hover { background:var(--panel2); }
+  .dot { width:10px; height:10px; border-radius:50%; flex:none; background:var(--muted); }
+  .res { display:flex; gap:10px; width:100%; height:auto; text-align:left; margin-bottom:6px; padding:6px; }
+  .res img { width:36px; height:78px; object-fit:contain; background:#000; border-radius:5px; flex:none; }
+  .res .a { display:block; font-weight:600; }
+  .res .t { display:block; color:var(--muted); font-size:12px; }
+  .res.sel { border-color:var(--accent); }
+
+  /* ---- diálogo de detalle: flota a la derecha; el mapa sigue visible y usable detrás ---- */
+  #nav { position:fixed; top:var(--bar-h); right:0; bottom:0; width:400px; z-index:15; display:flex; flex-direction:column; background:var(--panel); border-left:1px solid var(--line); overflow:hidden; }
+  #navHead { flex:none; display:flex; align-items:center; gap:6px; padding:10px 8px 10px 16px; border-bottom:1px solid var(--line); }
+  #navTitle { flex:1; min-width:0; }
+  #navHead .kicker { min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #stitle { margin:0; font-size:16px; line-height:1.3; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #navActions { display:flex; flex-wrap:wrap; gap:8px; }
+  #navActions button { flex:none; height:32px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #annWrap, #history { border:1px solid var(--line); border-radius:12px; background:var(--panel2); }
+  #annWrap { margin:0 12px 12px; padding:14px 16px; }
+  #history { padding:12px; display:flex; flex-direction:column; gap:8px; }
+  #stage { flex:1; min-height:0; overflow:auto; display:block; padding-bottom:12px; }
+  #shotArea { position:relative; display:flex; align-items:flex-start; justify-content:center; gap:10px; padding:14px 16px 8px; }
+  #shotArea img { max-width:100%; max-height:48vh; object-fit:contain; border-radius:12px; border:1px solid var(--line2); background:#000; box-shadow:0 12px 36px rgba(0,0,0,.5); }
+  #stage.cmp #shotArea img { max-width:calc(50% - 5px); }
+  #viewToggle { padding:12px 16px 0; }
+  #htmlBox { flex:none; overflow:hidden; border-radius:12px; border:1px solid var(--line2); background:#fff; box-shadow:0 12px 36px rgba(0,0,0,.5); }
+  #htmlFrame { display:block; border:0; background:#fff; transform-origin:0 0; }
+  #annBanner { position:absolute; top:4px; left:50%; transform:translateX(-50%); background:var(--warn); color:#1a1200; padding:4px 12px; border-radius:999px; font-weight:600; font-size:12px; z-index:4; pointer-events:none; white-space:nowrap; }
+  #route { display:flex; align-items:center; gap:6px; overflow-x:auto; padding:12px 16px 0; }
+  .sec { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:12px; }
+  .sec:last-child { border-bottom:0; }
+  #nav p { margin:0; color:var(--muted); font-size:14px; line-height:1.5; }
+  h3 { margin:0; font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); font-weight:700; display:flex; align-items:center; gap:8px; }
+  .count { background:var(--raise); border:1px solid var(--line2); border-radius:999px; padding:0 8px; font-size:11px; letter-spacing:0; }
+  .kicker { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; }
+  .row { display:flex; gap:8px; }
+  .row button { flex:1; }
+  .seg button { height:38px; font-weight:600; }
+  .wide { width:100%; height:38px; }
+  .links { font-size:12px; color:var(--muted); }
+  .links a { color:var(--accent); }
+  #histStrip { flex-wrap:wrap; }
+  #histStrip button { flex:none; height:28px; padding:0 8px; font-size:12px; }
+  .shotpath { display:block; margin:4px 0; user-select:text; -webkit-user-select:text; word-break:break-all; }
+  .change { font-size:12px; background:#2a2110; border:1px solid var(--warn); border-radius:8px; padding:10px 12px; }
+  .change code { display:block; font:11px ui-monospace,Menlo,monospace; }
+  .change .add { color:#7ad39a; } .change .del { color:#e5736a; }
+  #ann { position:absolute; touch-action:none; pointer-events:none; }
+  #ann.on { pointer-events:auto; cursor:crosshair; outline:2px dashed var(--warn); outline-offset:5px; border-radius:14px; }
+  .hot { position:absolute; border:2px dashed rgba(140,196,238,.9); background:rgba(140,196,238,.12); border-radius:5px; cursor:pointer; pointer-events:auto; }
+  .hot:hover, .hot.hl { background:rgba(140,196,238,.35); border-style:solid; }
+  #ann.on .hot { pointer-events:none; }
+  .annbox { position:absolute; border:2px solid var(--warn); background:rgba(232,176,74,.14); border-radius:4px; }
+  .annbox b { position:absolute; left:-12px; top:-12px; width:24px; height:24px; border-radius:50%; background:var(--warn); color:#1a1200; font-size:12px; display:grid; place-items:center; box-shadow:0 2px 6px rgba(0,0,0,.5); }
+  .annbox.draft { border-style:dashed; }
+  #annForm { display:flex; flex-direction:column; gap:8px; background:var(--panel2); border:1px solid var(--line2); border-radius:10px; padding:10px; }
+  #annText { width:100%; background:var(--bg); color:var(--fg); border:1px solid var(--line2); border-radius:8px; padding:8px 10px; font:inherit; resize:vertical; min-height:84px; }
+  #annMsg { color:var(--accent); }
+  #annMsg:empty, #annList:empty { display:none; }
+  .ann { display:flex; gap:12px; align-items:flex-start; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px; }
+  .ann .num { flex:none; width:24px; height:24px; border-radius:50%; background:var(--warn); color:#1a1200; font-weight:700; font-size:12px; display:grid; place-items:center; }
+  .ann .abody { min-width:0; flex:1; }
+  .ann p { color:var(--fg); margin:1px 0 6px; font-size:14px; overflow-wrap:anywhere; }
+  .acts { display:flex; gap:2px; margin-left:-8px; }
+  details.keys { color:var(--muted); font-size:12px; }
+  details.keys summary { cursor:pointer; padding:2px 0; }
+  .kgrid { display:grid; grid-template-columns:auto 1fr; gap:6px 12px; margin-top:10px; align-items:center; }
+  .kgrid kbd { margin:0; justify-self:start; }
+
+  .sep { flex:none; color:var(--muted); }
+  .chip { flex:none; display:flex; gap:8px; align-items:center; height:auto; padding:4px 10px 4px 4px; border-radius:10px; text-align:left; }
+  .chip img { width:20px; height:44px; object-fit:contain; background:#000; border-radius:4px; flex:none; }
+  .chip .t { display:block; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:600; }
+  .chip .fork { display:block; margin-top:2px; font:700 10.5px ui-monospace,Menlo,monospace; font-style:normal; color:var(--warn); }
+  .chip.cur { border-color:var(--accent); background:rgba(140,196,238,.12); cursor:default; }
+  #outRail.fork { background:rgba(232,176,74,.06); }
+  #outRail.fork .rhint { color:var(--warn); }
+  .rail { display:flex; flex-direction:column; gap:10px; padding:14px 16px; margin:0 12px 12px; border:1px solid var(--line); border-radius:12px; background:var(--panel2); }
+  .rhint { margin:-4px 0 4px; font-size:12px; color:var(--muted); }
+  .rlist { display:flex; flex-direction:column; gap:10px; }
+  .rempty { margin:0; color:var(--muted); font-size:13px; padding:8px 4px; }
+  .rcard { display:flex; gap:12px; align-items:center; width:100%; height:auto; text-align:left; padding:8px; border-radius:12px; }
+  .rcard img { width:48px; height:104px; object-fit:contain; background:#000; border-radius:6px; flex:none; }
+  .rcard .a { display:block; font-weight:600; font-size:13.5px; line-height:1.3; }
+  .rcard .a i { font:700 11px ui-monospace,Menlo,monospace; font-style:normal; color:var(--accent-ink); background:var(--warn); border-radius:5px; padding:1px 6px; margin-right:7px; }
+  .rcard .t, .rcard .m { display:block; color:var(--muted); font-size:12px; margin-top:3px; line-height:1.3; }
+  .rcard .m { color:var(--accent); }
+  .rcard.here { border-color:var(--accent); background:rgba(140,196,238,.09); }
+  .rcard.taken { border-color:var(--warn); }
+  .rcard.f { border-style:dashed; border-color:var(--warn); color:var(--warn); cursor:default; padding:10px 12px; }
+  @media (max-width:1480px) { #hint { display:none; } }
+  @media (max-width:760px) {
+    #nav { top:auto; left:8px; right:8px; bottom:8px; width:auto; height:62vh; border:1px solid var(--line2); border-radius:16px; }
+    #ask, #runCard { left:8px; right:8px; bottom:8px; width:auto; margin:0; }
+    #runCard { z-index:16; }
+    #runHead { flex-wrap:wrap; }
+    #runCard.fail #runTitle { margin-right:auto; }
+    #runCard.fail #runMsg { order:1; flex:1 1 100%; }
+    #runMsg { flex-basis:140px; white-space:normal; overflow:visible; text-overflow:clip; }
+    header { height:auto; min-height:48px; padding:6px 12px; flex-wrap:wrap; }
+    .tools { flex:1 1 100%; margin-left:0; }
+    #q { flex:1 1 140px; width:auto; min-width:0; }
+    #flowSel { max-width:100%; }
+    .dockGrid .field { flex-basis:100%; }
+    #dockTop { flex-wrap:wrap; }
+    #dockTabs button { padding:0 8px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <a id="chooseMap" href="/choose" title="Back to the maps list">← Maps</a>
+  <h1 id="title"></h1>
+  <span id="sub"></span>
+  <span id="legend"></span>
+  <div class="tools">
+    <input id="q" type="search" placeholder="Search screens ( / )" aria-label="Search screens" autocomplete="off">
+    <button id="flowsBtn">Flows</button>
+    <select id="flowSel" aria-label="Jump to a flow"></select>
+    <div id="zoomGroup" role="group" aria-label="Zoom">
+      <button id="zout" aria-label="Zoom out">−</button>
+      <span id="zlabel">100%</span>
+      <button id="zin" aria-label="Zoom in">+</button>
+      <button id="zfit">Fit</button>
+    </div>
+    <button id="groupBtn" hidden title="Group the selected screens so they move together (shift-click or press Space on a screen to select)">Group <kbd>G</kbd></button>
+    <form id="groupForm" hidden>
+      <input id="groupName" maxlength="60" placeholder="Group name" aria-label="Group name" autocomplete="off">
+      <button class="pri" type="submit">Save</button>
+      <button id="groupCancel" type="button">Cancel</button>
+    </form>
+    <span id="groupMsg" role="status"></span>
+    <button id="resetBtn" hidden title="Forget the positions you dragged and use the automatic layout">Reset layout</button>
+    <button id="sbsBtn" hidden title="Draw each screen as before | after on the map">Before | After</button>
+    <button id="edgesBtn" aria-pressed="true" title="Hide or show the connections between screens (E)">Connections</button>
+    <button id="changesBtn" title="Every capture of every screen, newest first">Changes</button>
+    <button id="copyTop" hidden>Copy annotations</button>
+    <button id="navBtn">Details</button>
+  </div>
+</header>
+<div id="mapChanged" role="status" hidden>The map changed. <button id="mapChangedReload" class="pri" type="button">Reload</button></div>
+
+<section id="runCard" hidden aria-label="Claude is working">
+  <div id="runHead"><span class="spin" aria-hidden="true"></span><b id="runTitle">Claude is working</b><span id="runMsg" role="status"></span><button id="runCancel" type="button" hidden>Cancel</button><button id="runRetry" class="pri" type="button" hidden>Try again</button><button id="runDismiss" class="ghost" type="button" hidden>Dismiss</button></div>
+  <pre id="runEvents" hidden></pre>
+  <div id="runApproval" hidden></div>
+</section>
+
+<section id="ask" hidden aria-label="Ask Claude">
+  <div id="dockTop">
+    <div id="dockTabs" role="tablist" aria-label="What do you want Claude to do">
+      <button type="button" role="tab" id="tabChange" tabindex="0" aria-selected="true" aria-controls="askForm">Change the map</button>
+      <button type="button" role="tab" id="tabNew" tabindex="-1" aria-selected="false" aria-controls="newScreen">New screen</button>
+      <button type="button" role="tab" id="tabCapture" tabindex="-1" aria-selected="false" aria-controls="capturePane">Capture now</button>
+    </div>
+    <span class="spacer"></span>
+    <span id="askState" role="status"></span>
+    <div id="askHelpWrap">
+      <button id="askHelpBtn" class="ghost" type="button" aria-expanded="false" aria-label="How to link a Claude session">?</button>
+      <div id="askHelp" hidden></div>
+    </div>
+  </div>
+
+  <form id="askForm" class="dockPane" role="tabpanel" aria-labelledby="tabChange">
+    <div class="dockLine">
+      <textarea id="askText" rows="2" placeholder="Ask Claude for a change to this map…" aria-label="Ask Claude"></textarea>
+      <button id="askSend" class="pri" type="submit">Send</button>
+    </div>
+    <div id="askImages" hidden></div>
+    <div class="dockOpts">
+      <button id="askAttachBtn" class="ghost" type="button" aria-label="Attach an image" title="Attach an image">＋</button>
+      <input id="askFile" type="file" accept="image/png,image/jpeg" multiple hidden>
+      <label class="tog"><input id="askAttach" type="checkbox"><i></i><span id="askAttachText">Attach my comments (0)</span></label>
+      <button id="askWorker" type="button" hidden>Run with a new Claude</button>
+      <span class="spacer"></span>
+      <span id="askMsg" role="status"></span>
+    </div>
+  </form>
+
+  <div id="newScreen" class="dockPane" role="tabpanel" aria-labelledby="tabNew" hidden>
+    <div class="dockGrid">
+      <label class="field"><span>Title</span><input id="nsTitle" type="text" placeholder="Title of the new screen" aria-label="Title of the new screen"></label>
+      <label class="field"><span>Action that leads to it (optional)</span><input id="nsAction" type="text" placeholder="Action that leads to it (e.g. tap «Pay»)" aria-label="Action that leads to the new screen"></label>
+      <label class="field full"><span>What the screen needs</span><textarea id="nsDescription" rows="2" placeholder="What the screen needs…" aria-label="Description of the new screen"></textarea></label>
+    </div>
+    <div class="dockOpts">
+      <label id="nsFromLabel" class="tog"><input id="nsFrom" type="checkbox"><i></i>Reached from the selected screen</label>
+      <span class="spacer"></span>
+      <button id="nsCapture" type="button">Capture it now</button>
+      <button id="nsSend" class="pri" type="button">Ask for the screen</button>
+    </div>
+  </div>
+
+  <div id="capturePane" class="dockPane" role="tabpanel" aria-labelledby="tabCapture" hidden>
+    <div class="dockGrid">
+      <label class="field"><span>Title</span><input id="capTitle" type="text" placeholder="e.g. Transfer confirmation" aria-label="Title of the screen to capture"></label>
+      <label class="field"><span>Where is the app?</span><input id="capNote" type="text" placeholder="URL for web, or “iOS simulator”" aria-label="Where the app runs"></label>
+    </div>
+    <div class="dockOpts">
+      <span>Claude opens the app, takes the screenshot and adds it to the map.</span>
+      <span class="spacer"></span>
+      <button id="capSend" class="pri" type="button">Capture it now</button>
+    </div>
+  </div>
+</section>
+<div id="flowsPop" class="pop" hidden></div>
+<div id="results" class="pop" hidden></div>
+<div id="changesPop" class="pop" hidden></div>
+<div id="view"><div id="empty" hidden></div><div id="hint">Scroll to pan · Ctrl/⌘ + scroll or pinch to zoom · drag the background to move · drag a screen to arrange · click it for details<span id="hintGroup" hidden> · shift-click or press Space on a screen to group them</span></div><div id="canvas"><svg id="svg"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c9d3dc"/></marker><marker id="ahw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e0a63a"/></marker></defs></svg></div></div>
+
+<aside id="nav" hidden role="dialog" aria-label="Screen detail">
+  <div id="navHead">
+    <div id="navTitle">
+      <h2 id="stitle"></h2>
+      <div class="kicker"><span class="dot" id="kdot"></span><span id="kicker"></span></div>
+    </div>
+    <button class="ghost" id="back" title="Go back (←)">← Back</button>
+    <button class="ghost" id="toFork" hidden title="Back to the last fork (B)">⑂ Fork</button>
+    <button class="ghost" id="toMap" aria-label="Close details" title="Close (Esc)">✕</button>
+  </div>
+  <div id="stage">
+    <nav id="route" aria-label="Path so far"></nav>
+    <div class="row seg" id="viewToggle" hidden role="group" aria-label="What the detail shows"><button id="viewCapture">Capture</button><button id="viewHtml">HTML</button></div>
+    <div id="shotArea">
+      <div id="annBanner" hidden>Drag to mark an area · click for the whole screen · Esc to stop</div>
+      <img id="shotPrev" alt="Before" hidden><img id="shot" alt=""><div id="ann"></div>
+      <div id="htmlBox" hidden><iframe id="htmlFrame" sandbox="allow-scripts" title="HTML mock of the screen"></iframe></div>
+    </div>
+    <div class="sec">
+      <p id="sdesc"></p>
+      <div class="links" id="links"></div>
+      <div id="navActions">
+        <button id="rcSend" type="button">Re-capture this screen</button>
+        <button id="copyShot">Copy screenshot</button>
+        <button id="exportRoute" hidden>Export route to this screen as video</button>
+      </div>
+      <div id="recapture" hidden>
+        <input id="rcNote" type="text" maxlength="500" placeholder="Note for the capture (e.g. the page's address, or which state to show)" aria-label="Note for capturing this screen again">
+        <p id="rcHint">Claude captures the selected screen again in the simulator, the emulator or the browser and updates the map. Mobile maps work best through a linked session, which has the agent-device permissions.</p>
+      </div>
+      <div id="shotMsg" class="links"></div>
+      <div id="exportMsg" class="links" role="status"></div>
+      <div id="change" class="change" hidden></div>
+      <div class="row"><button id="hotBtn" hidden>Hotspots <kbd>H</kbd></button><button id="cmpBtn" hidden>Compare <kbd>C</kbd></button></div>
+      <div id="cmpNote" class="links"></div>
+      <div id="history" hidden>
+        <h3>History <span class="count" id="histCount">0</span></h3>
+        <div class="row" id="histStrip"></div>
+        <div class="row"><button id="histCmp" hidden>Compare with current</button></div>
+      </div>
+      <div id="htmlNote" class="links" hidden></div>
+    </div>
+    <nav class="rail" id="outRail" aria-label="Where you can go">
+      <h3>Leads to <span class="count" id="outCount">0</span></h3>
+      <p class="rhint" id="outHint"></p>
+      <div class="rlist" id="outList"></div>
+    </nav>
+    <nav class="rail" aria-label="Where you came from">
+      <h3>Reached from <span class="count" id="inCount">0</span></h3>
+      <p class="rhint" id="inHint">← goes back</p>
+      <div class="rlist" id="inList"></div>
+    </nav>
+    <div class="sec" id="annWrap" hidden>
+      <h3>Comments <span class="count" id="annCount">0</span></h3>
+      <div class="row seg"><button id="annBtn">✎ Mark area <kbd>A</kbd></button><button id="wholeBtn" title="Annotate the whole screen (W)">▢ Whole screen <kbd>W</kbd></button></div>
+      <div id="annForm" hidden>
+        <textarea id="annText" rows="3" placeholder="What do you want for this area?"></textarea>
+        <div class="row"><button id="annSave" class="pri">Save <kbd>Ctrl+Enter</kbd></button><button id="annCancel">Cancel</button></div>
+      </div>
+      <div id="annMsg" class="links"></div>
+      <div id="annList"></div>
+      <button id="copyAll" class="pri wide">Copy for Claude</button>
+    </div>
+    <div id="annHint" class="sec links" hidden>To annotate, open the map with <b>flowmap.py serve &lt;folder&gt;</b>.</div>
+    <div class="sec">
+      <details id="designContract" hidden>
+        <summary>Map settings · Design contract</summary>
+        <div id="designBody">
+          <p id="designHint">Describe the colours, typography, spacing and components of this map. New screens follow it instead of copying their neighbours. It is saved as DESIGN.md in the map folder.</p>
+          <textarea id="designText" rows="8" placeholder="Colours, typography, spacing, components…" aria-label="Design contract"></textarea>
+          <button id="designSave" class="pri" type="button">Save</button>
+          <span id="designMsg" role="status"></span>
+        </div>
+      </details>
+      <details class="keys"><summary>Keyboard and mouse</summary>
+        <div class="kgrid"><kbd>scroll</kbd><span>pan the map</span><kbd>Ctrl/⌘ + scroll</kbd><span>zoom (pinch on a trackpad)</span><kbd>drag background</kbd><span>move the map</span><kbd>drag a screen</kbd><span>arrange it (saved)</span><kbd>0</kbd><span>fit everything</span><kbd>F</kbd><span>full screen</span><kbd>+ −</kbd><span>zoom</span><kbd>1-9</kbd><span>pick an exit</span><kbd>←</kbd><span>go back</span><kbd>→</kbd><span>first exit</span><kbd>B</kbd><span>back to the last fork</span><kbd>A</kbd><span>mark an area</span><kbd>H</kbd><span>clickable zones</span><kbd>C</kbd><span>before / after</span><kbd>E</kbd><span>show / hide the connections</span><kbd>/</kbd><span>search</span><kbd>Esc</kbd><span>close the details</span></div>
+      </details>
+    </div>
+  </div>
+</aside>
+
+<script>
+/*__FLOWMAP_DATA__*/
+
+const THUMB_H = 280, TAG_H = 22, GAP_X = 210, ROW_PITCH = THUMB_H + TAG_H + 70, LEFT = 40, BAND_HEAD = 30;
+const $ = id => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, cls = '', text = null, ...kids) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  n.append(...kids);
+  return n;
+};
+// a button that copies `text` to the clipboard and says whether the browser allowed it
+const copyButton = (cls, text) => {
+  const copy = el('button', cls, 'Copy path');
+  copy.type = 'button';
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(text); copy.textContent = 'Copied'; }
+    catch (e) { copy.textContent = 'Blocked: select the path to copy it'; }
+  };
+  return copy;
+};
+const svgEl = (tag, attrs = {}) => {
+  const n = document.createElementNS(NS, tag);
+  Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v));
+  return n;
+};
+const thumbOf = s => s.thumb || s.image;
+// El «antes» de una pantalla: la imagen de hoy (`baseline`, ver `add --before`) o la última recaptura aceptada (`previous`).
+const beforeOf = s => s.baseline || s.previous;
+const beforeThumbOf = s => s.baseline ? (s.baselineThumb || s.baseline) : s.previous;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+// localStorage puede faltar o lanzar (ventana privada, sitio bloqueado): el visor funciona igual sin él.
+const store = {
+  get(key) { try { return localStorage.getItem('flowmap-' + key); } catch (e) { return null; } },
+  set(key, value) { try { if (value == null) localStorage.removeItem('flowmap-' + key); else localStorage.setItem('flowmap-' + key, value); } catch (e) { /* opcional */ } },
+};
+// Connections: one class on #view hides every edge line and label (nothing is redrawn); the choice is kept per browser and applied before the map is drawn
+function setEdgesShown(shown) {
+  $('view').classList.toggle('no-edges', !shown);
+  $('edgesBtn').setAttribute('aria-pressed', String(shown));
+  store.set('edges', shown ? null : 'hidden');
+}
+setEdgesShown(store.get('edges') !== 'hidden');
+$('edgesBtn').onclick = () => setEdgesShown($('view').classList.contains('no-edges'));
+const NODE_PREFIX = 'node-';
+const nodeEl = id => $(NODE_PREFIX + id);
+const nodeId = n => n.id.slice(NODE_PREFIX.length);
+const thumbImg = src => Object.assign(el('img'), { src, alt: '', loading: 'lazy', decoding: 'async' });
+
+const screens = DATA.screens, byId = Object.fromEntries(screens.map(s => [s.id, s]));
+const flowOf = Object.fromEntries(DATA.flows.map(f => [f.id, f]));
+const out = {}, inc = {}, front = {};
+screens.forEach(sc => { out[sc.id] = []; inc[sc.id] = []; front[sc.id] = []; });
+DATA.edges.forEach(e => { out[e.from].push(e); inc[e.to].push(e); });
+DATA.frontier.forEach(f => front[f.from].push(f));
+
+document.title = DATA.title;
+$('title').textContent = DATA.title;
+const meta = DATA.meta || {};
+$('sub').textContent = meta.subtitle || '';
+if (meta.blocks?.length) {
+  const b = el('div', '', 'Blockers: ' + meta.blocks.join('; '));
+  b.id = 'blocks'; b.title = 'Click to expand';
+  b.onclick = () => b.classList.toggle('open');
+  document.querySelector('header').after(b);
+}
+const hidden = new Set(DATA.flows.filter(f => f.hidden).map(f => f.id));
+const shownScreens = () => screens.filter(s => !hidden.has(s.flow));
+const visibleFlows = () => DATA.flows.filter(f => !hidden.has(f.id));
+function updateLegend() {
+  const hiddenCount = screens.length - shownScreens().length;
+  $('legend').textContent = [
+    `${screens.length} screens${hiddenCount ? ` (${hiddenCount} hidden)` : ''}`,
+    `${DATA.frontier.length} unexplored branches`,
+    `${screens.filter(s => s.status === 'changed').length} changed`,
+  ].join(' · ');
+}
+
+// ---------- mapa ----------
+const aspect = s => s.width && s.height ? s.width / s.height : (DATA.platform === 'web' ? 1.6 : .46);
+const thumbW = s => Math.round(Math.min(480, Math.max(130, THUMB_H * aspect(s))));
+// Una pantalla con «antes» se dibuja en el mapa como un par, antes y después lado a lado.
+const hasBefore = screens.some(beforeOf);
+let sbs = hasBefore;
+if (store.get('sbs')) sbs = store.get('sbs') === 'on';
+const PAIR_GAP = 14;
+const nodeW = s => sbs && beforeOf(s) ? 2 * thumbW(s) + PAIR_GAP : thumbW(s);
+const pos = {};
+
+// Posiciones que dejó la persona arrastrando; mandan sobre el layout automático. Con `flowmap.py serve` se guardan en
+// <mapa>/layout.json (y `build` las incrusta); abierto como archivo, se quedan en este navegador. Una sola fuente a la vez:
+// la guardada en este navegador si existe, si no la incrustada (mezclarlas dejaría posiciones de dos sesiones distintas).
+const LKEY = 'layout:' + DATA.title;
+const known = positions => Object.fromEntries(Object.entries(positions).filter(([id]) => byId[id]));
+const localCustom = () => { try { return JSON.parse(store.get(LKEY) || 'null'); } catch (e) { return null; } };
+let custom = known(localCustom() || DATA.layout || {});
+
+// Grupos: pantallas que se mueven juntas. Viven en <mapa>/groups.json (solo con servidor); `selected` es la selección múltiple del lienzo.
+let groups = [];
+const selected = new Set();
+
+let cur = null;  // la pantalla abierta en el diálogo (o la última que se abrió)
+let exporting = false;  // a route video is rendering
+let exportTarget = null;  // the screen that export was started for
+const EXPORT_PROGRESS = 'Rendering the route video…';
+let serverAnswered = false;  // the status answered at least once: server-only controls (export) show
+const MAX_ROWS = 4, LANES = 3, BIG_MAP = 30;
+function layout() {
+  const cw = Math.max(130, ...screens.map(nodeW));
+  const bands = visibleFlows().map(flow => {
+    const ids = screens.filter(s => s.flow === flow.id).map(s => s.id);
+    const inFlow = new Set(ids), depth = {};
+    const roots = ids.filter(id => !inc[id].some(e => inFlow.has(e.from) && e.from !== id));
+    const queue = roots.length ? roots.slice() : ids.slice(0, 1);
+    queue.forEach(r => depth[r] = 0);
+    for (let i = 0; i < queue.length; i++) {
+      out[queue[i]].forEach(e => {
+        if (inFlow.has(e.to) && depth[e.to] === undefined) { depth[e.to] = depth[queue[i]] + 1; queue.push(e.to); }
+      });
+    }
+    ids.forEach(id => { depth[id] ??= 0; });
+    const stacks = {};
+    ids.forEach(id => { stacks[depth[id]] = (stacks[depth[id]] ?? 0) + 1; });
+    const local = {};
+    let rows = Math.max(1, ...Object.values(stacks)), cols;
+    if (rows > MAX_ROWS) {
+      // un flujo largo no cabe en una columna por nivel: se reparte en columnas de MAX_ROWS pantallas, en orden de recorrido
+      const order = ids.slice().sort((a, b) => depth[a] - depth[b]);
+      order.forEach((id, i) => { local[id] = { x: Math.floor(i / MAX_ROWS) * (cw + GAP_X), y: BAND_HEAD + (i % MAX_ROWS) * ROW_PITCH }; });
+      rows = MAX_ROWS; cols = Math.ceil(ids.length / MAX_ROWS);
+    } else {
+      const next = {};
+      ids.forEach(id => {
+        const k = next[depth[id]] = (next[depth[id]] ?? -1) + 1;
+        local[id] = { x: depth[id] * (cw + GAP_X), y: BAND_HEAD + k * ROW_PITCH };
+      });
+      cols = Math.max(...ids.map(id => depth[id])) + 1;
+    }
+    return { local, w: cols * (cw + GAP_X), h: BAND_HEAD + rows * ROW_PITCH + 20 };
+  });
+  // un mapa grande reparte los flujos en carriles, cada uno bajo el más corto, para que no sea una torre; uno pequeño los apila
+  const lanes = Array.from({ length: screens.length > BIG_MAP ? LANES : 1 }, () => ({ top: 20, w: 0, bands: [] }));
+  bands.forEach(band => {
+    const lane = lanes.reduce((best, l) => l.top < best.top ? l : best);
+    lane.bands.push({ band, y: lane.top });
+    lane.top += band.h; lane.w = Math.max(lane.w, band.w);
+  });
+  const laneW = Math.max(...lanes.map(l => l.w));
+  lanes.forEach((lane, i) => lane.bands.forEach(({ band, y }) => {
+    Object.entries(band.local).forEach(([id, p]) => { pos[id] = { x: LEFT + i * (laneW + 120) + p.x, y: y + p.y }; });
+  }));
+  Object.entries(custom).forEach(([id, p]) => { if (pos[id]) pos[id] = { x: p.x, y: p.y }; });
+  placeZones();
+}
+// El título de un flujo va sobre sus pantallas: se coloca desde donde estén, no desde donde las puso el layout automático.
+function zoneBox(flow) {
+  const own = screens.filter(s => s.flow === flow.id && pos[s.id]).map(s => pos[s.id]);
+  return own.length ? { x: Math.min(...own.map(p => p.x)), y: Math.min(...own.map(p => p.y)) - BAND_HEAD } : null;
+}
+function placeZones() {
+  visibleFlows().forEach(f => {
+    const box = zoneBox(f);
+    if (!box) return;
+    f.top = box.y;
+    const z = $('zone-' + f.id);
+    if (z) { z.style.left = box.x + 'px'; z.style.top = box.y + 'px'; }
+  });
+}
+
+// salta a una pantalla del mapa: la centra y la destaca un instante (no abre el detalle)
+function focusScreen(id) {
+  revealFlowOf(id);
+  const n = nodeEl(id);
+  if (!n) return;
+  centerOn(id, Math.max(zoom, FOCUS_Z));
+  n.classList.remove('flash'); void n.offsetWidth; n.classList.add('flash');
+}
+let drawn = null;  // los elementos de la flecha que se está dibujando (para poder rehacer solo esa)
+function label(x, y, text, cls = '', to = null) {
+  const d = el(to ? 'button' : 'div', 'lab ' + cls, text);
+  d.style.left = x + 'px'; d.style.top = y + 'px';
+  if (to) { d.title = 'Go to ' + byId[to].title; d.onclick = () => focusScreen(to); }
+  $('canvas').appendChild(d);
+  drawn?.push(d);
+}
+function path(d, { dashed = false, pending = false, to = null } = {}) {
+  const attrs = { d, fill: 'none', stroke: pending ? '#e0a63a' : '#c9d3dc', 'marker-end': pending ? 'url(#ahw)' : 'url(#ah)' };
+  if (dashed) attrs['stroke-dasharray'] = '5 4';
+  const line = svgEl('path', pending ? { ...attrs, class: 'front' } : attrs);
+  $('svg').appendChild(line);
+  drawn?.push(line);
+  if (to) {  // franja ancha e invisible para poder pulsar la línea
+    const hit = svgEl('path', { d, fill: 'none', stroke: 'transparent', 'stroke-width': 16, class: 'hit' });
+    hit.onclick = () => focusScreen(to);
+    $('svg').appendChild(hit);
+    drawn?.push(hit);
+  }
+}
+
+const edgeEls = new Map();  // arista (o rama sin explorar) -> sus elementos dibujados
+// En un mapa grande las flechas entre flujos son una maraña y las etiquetas tapan las miniaturas (y sus clics): las flechas entre
+// flujos y todas las etiquetas solo se dibujan para la pantalla abierta (el diálogo las lista todas).
+const touchesOpen = e => e.from === cur || e.to === cur;
+const crossFlowHidden = e => screens.length > BIG_MAP && byId[e.from].flow !== byId[e.to].flow && !touchesOpen(e);
+const labelHidden = e => screens.length > BIG_MAP && !touchesOpen(e);
+function drawEdge(e) {
+  if (e.from === e.to || !pos[e.from] || !pos[e.to] || crossFlowHidden(e)) return;
+  const a = pos[e.from], b = pos[e.to], aw = nodeW(byId[e.from]), bw = nodeW(byId[e.to]);
+  if (b.x > a.x) {
+    const sx = a.x + aw, sy = a.y + TAG_H + THUMB_H / 2, tx = b.x, ty = b.y + TAG_H + THUMB_H / 2;
+    const dx = Math.max(40, (tx - sx) / 2);
+    path(`M${sx},${sy} C${sx + dx},${sy} ${tx - dx},${ty} ${tx},${ty}`, { to: e.to });
+    if (!labelHidden(e)) label((sx + tx) / 2, (sy + ty) / 2, e.action, '', e.to);
+  } else {
+    // vuelta o salto atrás: rodea por debajo de las miniaturas
+    const sx = a.x + aw / 2, sy = a.y + TAG_H + THUMB_H, tx = b.x + bw / 2, ty = b.y + TAG_H + THUMB_H;
+    const yb = Math.max(sy, ty) + 55;
+    path(`M${sx},${sy} C${sx},${yb} ${tx},${yb} ${tx},${ty}`, { dashed: true, to: e.to });
+    if (!labelHidden(e)) label((sx + tx) / 2, (sy + ty) / 8 + 0.75 * yb, `${e.action} → ${byId[e.to].title}`, '', e.to);  // la vuelta cae lejos: el destino va en la etiqueta
+  }
+}
+function drawFrontier(id) {
+  const a = pos[id];
+  if (!a) return;
+  front[id].forEach((f, k) => {
+    const sx = a.x + nodeW(byId[id]), sy = a.y + TAG_H + 40 + k * 56;
+    path(`M${sx},${sy} L${sx + 80},${sy}`, { dashed: true, pending: true });
+    label(sx + 8, sy - 4, 'unexplored: ' + f.action, 'f');
+  });
+}
+// Dibuja una flecha recordando sus elementos; si ya estaba dibujada, primero quita los viejos.
+function track(key, draw) {
+  edgeEls.get(key)?.forEach(n => n.remove());
+  const els = drawn = [];
+  draw();
+  drawn = null;
+  edgeEls.set(key, els);
+}
+function drawEdges() {
+  DATA.edges.forEach(e => track(e, () => drawEdge(e)));
+  Object.keys(front).forEach(id => track(front[id], () => drawFrontier(id)));
+}
+function clearEdges() {
+  $('canvas').querySelectorAll('.lab').forEach(n => n.remove());
+  $('svg').querySelectorAll(':scope > path').forEach(n => n.remove());
+  edgeEls.clear();
+}
+// Al arrastrar una pantalla solo se rehacen sus flechas (unas pocas), no las de todo el mapa.
+const movedIds = new Set();
+function redrawEdgesOf(ids) {
+  DATA.edges.filter(e => ids.has(e.from) || ids.has(e.to)).forEach(e => track(e, () => drawEdge(e)));
+  ids.forEach(id => track(front[id], () => drawFrontier(id)));
+}
+let edgeFrame = 0;
+const scheduleEdges = id => {
+  movedIds.add(id);
+  if (!edgeFrame) edgeFrame = requestAnimationFrame(() => { edgeFrame = 0; redrawEdgesOf(new Set(movedIds)); movedIds.clear(); });
+};
+
+function drawNodes() {
+  visibleFlows().forEach(f => {
+    const z = el('div', 'zone', f.title);
+    z.id = 'zone-' + f.id; z.style.color = f.color;
+    $('canvas').appendChild(z);
+  });
+  placeZones();
+  shownScreens().forEach(s => {
+    const p = pos[s.id];
+    const tag = el('div', 'tag', null, el('span', '', s.id), el('b', '', s.title), ...(s.status === 'changed' ? [el('span', 'pill', 'changed')] : []));
+    tag.title = s.title;
+    const img = thumbImg(thumbOf(s));
+    img.alt = s.title; img.style.height = THUMB_H + 'px';
+    img.dataset.thumb = thumbOf(s); img.dataset.full = s.image;
+    let body = img;
+    if (sbs && beforeOf(s)) {
+      const before = thumbImg(beforeThumbOf(s));
+      before.alt = s.title + ' (before)'; before.style.height = THUMB_H + 'px';
+      before.dataset.thumb = beforeThumbOf(s); before.dataset.full = beforeOf(s);
+      const half = (cap, im) => { const h = el('span', 'half', null, el('span', 'cap', cap), im); h.dataset.side = cap.toLowerCase(); return h; };
+      body = el('span', 'pair', null, half('Before', before), half('After', img));
+    }
+    const b = el('button', 'node', null, tag, body);
+    b.id = NODE_PREFIX + s.id;
+    b.style.cssText = `left:${p.x}px;top:${p.y}px;width:${nodeW(s)}px;--c:${flowOf[s.flow].color}`;
+    setPicked(b, selected.has(s.id));
+    b.onclick = e => {
+      if (canAnnotate && (e.shiftKey || e.ctrlKey || e.metaKey)) return toggleSelected(s.id);
+      openNav(s.id, true, e.target.closest('.half')?.dataset.side);  // en un par, cada mitad abre su propia captura
+    };
+    // Space picks the focused screen like shift-click; both phases are cancelled so the button does not also "click" and open the detail
+    b.onkeydown = e => { if (canAnnotate && e.key === ' ') { e.preventDefault(); if (!e.repeat) toggleSelected(s.id); } };
+    b.onkeyup = e => { if (canAnnotate && e.key === ' ') e.preventDefault(); };
+    $('canvas').appendChild(b);
+  });
+}
+
+// ---------- lienzo infinito: pan y zoom ----------
+// Nada hace scroll: el mundo (#canvas) se mueve con translate + scale y los puntos del fondo siguen el mismo movimiento.
+let zoom = 1, tx = 20, ty = 20, animId = 0;
+const MIN_Z = .05, MAX_Z = 2, FOCUS_Z = .45, viewEl = $('view');
+const clampZ = z => clamp(z, MIN_Z, MAX_Z);
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Las miniaturas miden unos 560 px de alto: bastan para ver todo el mapa y se ven blandas con zoom. Al pasar de ese tamaño
+// se cambian por la captura original, solo las que se ven (en un mapa grande, pedir todas a la vez es lo caro).
+const intersectsView = r => { const v = viewEl.getBoundingClientRect(); return r.right > v.left && r.left < v.right && r.bottom > v.top && r.top < v.bottom; };
+let resTimer = 0;
+function syncResolution() {
+  const need = THUMB_H * zoom * (window.devicePixelRatio || 1) > 520;
+  document.querySelectorAll('.node img[data-full]').forEach(im => {
+    if (need && !intersectsView(im.getBoundingClientRect())) return;
+    const want = need ? im.dataset.full : im.dataset.thumb;
+    if (im.getAttribute('src') !== want) im.src = want;
+  });
+}
+function applyView() {
+  $('canvas').style.transform = `translate(${tx}px,${ty}px) scale(${zoom})`;
+  // el fondo de puntos va por estilo directo: una variable CSS en #view invalidaría el estilo de todos los nodos en cada fotograma
+  viewEl.style.backgroundPosition = `${tx}px ${ty}px`;
+  viewEl.style.backgroundSize = `${28 * zoom}px ${28 * zoom}px`;
+  $('zlabel').textContent = Math.round(zoom * 100) + '%';
+  clearTimeout(resTimer); resTimer = setTimeout(syncResolution, 150);  // al terminar el gesto, no en cada fotograma
+}
+// el hueco que deja libre el diálogo de detalle: el mapa se centra en lo que se ve, no en lo que tapa el diálogo
+const visibleW = () => viewEl.clientWidth - ($('nav').hidden ? 0 : $('nav').offsetWidth + 24);
+function cancelAnim() { cancelAnimationFrame(animId); }
+function animateTo(nz, ntx, nty, ms = 320) {
+  cancelAnim();
+  if (reduceMotion || !ms) { zoom = nz; tx = ntx; ty = nty; applyView(); return; }
+  const z0 = zoom, x0 = tx, y0 = ty, t0 = performance.now();
+  const step = now => {
+    const k = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+    zoom = z0 + (nz - z0) * e; tx = x0 + (ntx - x0) * e; ty = y0 + (nty - y0) * e;
+    applyView();
+    if (k < 1) animId = requestAnimationFrame(step);
+  };
+  animId = requestAnimationFrame(step);
+}
+function zoomAt(factor, cx, cy) {
+  cancelAnim();
+  const z = clampZ(zoom * factor), k = z / zoom;
+  tx = cx - (cx - tx) * k; ty = cy - (cy - ty) * k; zoom = z; applyView();
+}
+const zoomCenter = factor => zoomAt(factor, visibleW() / 2, viewEl.clientHeight / 2);
+const screenBox = id => ({ x: pos[id].x, y: pos[id].y, w: nodeW(byId[id]), h: TAG_H + THUMB_H });
+function centerOn(id, z = zoom) {
+  if (!pos[id]) return;
+  const b = screenBox(id);
+  animateTo(z, visibleW() / 2 - (b.x + b.w / 2) * z, viewEl.clientHeight / 2 - (b.y + b.h / 2) * z);
+}
+// El rectángulo que ocupa el mapa (pantallas y títulos de flujo) con un margen; sale de las posiciones actuales, también las arrastradas.
+function bounds() {
+  const boxes = shownScreens().map(sc => screenBox(sc.id));
+  const x0 = Math.min(...boxes.map(b => b.x)), x1 = Math.max(...boxes.map(b => b.x + b.w));
+  const y0 = Math.min(...boxes.map(b => b.y), ...visibleFlows().map(f => f.top ?? Infinity)), y1 = Math.max(...boxes.map(b => b.y + b.h));
+  return { x0: x0 - LEFT, y0: y0 - 20, x1: x1 + 60, y1: y1 + 60 };
+}
+function fit() {
+  if (!shownScreens().length) return;
+  const pad = 40, vw = visibleW(), vh = viewEl.clientHeight, b = bounds(), w = b.x1 - b.x0, h = b.y1 - b.y0;
+  const z = clampZ(Math.min(1, (vw - 2 * pad) / w, (vh - 2 * pad) / h));
+  animateTo(z, (vw - w * z) / 2 - b.x0 * z, (vh - h * z) / 2 - b.y0 * z);
+}
+// sigue al diálogo: si la pantalla elegida queda fuera de lo visible (o tapada por el diálogo), el mapa se desplaza hasta ella
+function selectOnMap(id) {
+  document.querySelectorAll('.node.cur').forEach(n => n.classList.remove('cur'));
+  nodeEl(id)?.classList.add('cur');
+  if (!pos[id]) return;
+  const b = screenBox(id), m = 24, vw = visibleW(), vh = viewEl.clientHeight;
+  const left = tx + b.x * zoom, top = ty + b.y * zoom, right = left + b.w * zoom, bottom = top + b.h * zoom;
+  const inside = left >= m && right <= vw - m && top >= m && bottom <= vh - m;
+  if (!inside) centerOn(id, Math.max(zoom, FOCUS_Z));
+}
+
+// Un solo gesto a la vez: arrastrar una pantalla la mueve, arrastrar el fondo mueve el mapa, dos dedos hacen zoom.
+// Un arrastre no cuenta como clic sobre la pantalla que había debajo.
+const ptrs = new Map();
+const DRAG_PX = 6;  // un toque de trackpad tiembla unos píxeles y tiene que seguir siendo un clic
+let gesture = null, pinch = null, suppressClick = false;
+const pdist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+const pmid = () => { const [a, b] = [...ptrs.values()], r = viewEl.getBoundingClientRect(); return { x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top }; };
+function resetPointers() {
+  gesture?.el?.classList.remove('dragging');
+  ptrs.clear(); gesture = null; pinch = null; viewEl.classList.remove('grabbing');
+}
+viewEl.addEventListener('pointerdown', e => {
+  if (e.button > 1 || e.target.closest('#hint, #empty')) return;
+  cancelAnim();
+  // Un ratón es un solo puntero. Si se perdió un «soltar» (fuera de la ventana, bajo una herramienta de capturas, un menú
+  // contextual), se olvida: si no, la siguiente pulsación parecería un pellizco de dos dedos y se tragaría todos los clics.
+  if (e.pointerType === 'mouse') resetPointers();
+  suppressClick = false;
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 2) { const m = pmid(); pinch = { d: pdist(), z: zoom, tx, ty, mx: m.x, my: m.y }; gesture = null; suppressClick = true; return; }
+  const node = e.button === 0 && e.target.closest('.node'), id = node && nodeId(node);
+  gesture = { x: e.clientX, y: e.clientY, moved: false, ...(id && pos[id] ? { id, el: node, ox: pos[id].x, oy: pos[id].y, others: groupMates(id) } : { ox: tx, oy: ty }) };
+});
+addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId)) return;
+  if (e.pointerType === 'mouse' && e.buttons === 0) { endPointer(e); return; }  // se soltó el botón en algún sitio que no vimos
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinch && ptrs.size === 2) {
+    const z = clampZ(pinch.z * pdist() / pinch.d), k = z / pinch.z, m = pmid();
+    tx = m.x - (pinch.mx - pinch.tx) * k; ty = m.y - (pinch.my - pinch.ty) * k; zoom = z; applyView(); return;
+  }
+  if (!gesture) return;
+  const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
+  if (!gesture.moved && Math.hypot(dx, dy) > DRAG_PX) { gesture.moved = true; gesture.el?.classList.add('dragging'); viewEl.classList.add('grabbing'); }
+  if (!gesture.moved) return;
+  if (!gesture.el) { tx = gesture.ox + dx; ty = gesture.oy + dy; applyView(); return; }
+  // every member of the dragged screen's group moves by the same distance
+  [{ id: gesture.id, ox: gesture.ox, oy: gesture.oy }, ...gesture.others].forEach(m => {
+    pos[m.id] = { x: Math.round(m.ox + dx / zoom), y: Math.round(m.oy + dy / zoom) };
+    nodeEl(m.id).style.left = pos[m.id].x + 'px'; nodeEl(m.id).style.top = pos[m.id].y + 'px';
+    scheduleEdges(m.id);
+  });
+  placeGroups();
+});
+addEventListener('blur', resetPointers);
+document.addEventListener('visibilitychange', () => { if (document.hidden) resetPointers(); });
+function endPointer(e) {
+  if (!ptrs.delete(e.pointerId)) return;
+  if (gesture?.moved) {
+    suppressClick = true;
+    if (gesture.el) {  // soltar guarda la posición; un clic sin arrastrar sigue abriendo el detalle
+      gesture.el.classList.remove('dragging');
+      [gesture.id, ...gesture.others.map(m => m.id)].forEach(id => { custom[id] = { ...pos[id] }; });
+      saveLayout(); placeZones();
+    }
+  }
+  if (ptrs.size < 2) pinch = null;
+  if (!ptrs.size) { gesture = null; viewEl.classList.remove('grabbing'); setTimeout(() => { suppressClick = false; }, 0); }
+}
+addEventListener('pointerup', endPointer); addEventListener('pointercancel', endPointer);
+viewEl.addEventListener('click', e => { if (suppressClick) { e.stopPropagation(); e.preventDefault(); } }, true);
+// rueda: mueve el mapa; con Ctrl/⌘ (o el pellizco de un trackpad, que llega como Ctrl+rueda) hace zoom hacia el cursor
+viewEl.addEventListener('wheel', e => {
+  e.preventDefault(); cancelAnim();
+  if (e.ctrlKey || e.metaKey) {
+    const r = viewEl.getBoundingClientRect();
+    zoomAt(Math.exp(-clamp(e.deltaY, -60, 60) * .01), e.clientX - r.left, e.clientY - r.top);
+  } else if (e.shiftKey && !e.deltaX) { tx -= e.deltaY; applyView(); }
+  else { tx -= e.deltaX; ty -= e.deltaY; applyView(); }
+}, { passive: false });
+addEventListener('keydown', e => {
+  if (e.target.matches('textarea,input,select') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === '0') fit();
+  else if (e.key.toLowerCase() === 'f') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  else if (e.key === '+' || e.key === '=') zoomCenter(1.25);
+  else if (e.key === '-' || e.key === '_') zoomCenter(.8);
+  else if (e.key.toLowerCase() === 'e') $('edgesBtn').click();
+  else if (e.key.toLowerCase() === 'g' && canAnnotate && selected.size >= 2) { e.preventDefault(); startNaming(); }
+  else if (e.key === 'Escape' && selected.size && $('nav').hidden) clearSelection();
+});
+// un clic en el fondo (no en una pantalla ni en la etiqueta de un grupo) deja la selección
+viewEl.addEventListener('click', e => { if (!e.target.closest('.node,.group-label,#hint')) clearSelection(); });
+addEventListener('resize', () => { if (!$('nav').hidden && cur) selectOnMap(cur); });
+
+// a map with no screens tells what to do and where it lives, and opens the dock on the form that asks for the first one
+const STARTERS = [
+  ['Sign in screen', 'Sign in', 'Email and password fields, a primary Sign in button, a forgot-password link and the error state for wrong credentials.'],
+  ['Home dashboard', 'Home dashboard', 'The first screen after signing in: a summary of the account, the main actions and the most recent activity.'],
+  ['Welcome / onboarding', 'Welcome', 'A short welcome with what the app does, a button to get started and a link for people who already have an account.'],
+];
+function showEmptyMapHelp() {
+  const examples = STARTERS.map(([label, title, description]) => {
+    const button = el('button', '', label);
+    button.type = 'button';
+    button.onclick = () => { $('nsTitle').value = title; $('nsDescription').value = description; selectTab($('tabNew')); $('nsDescription').focus(); };
+    return button;
+  });
+  const another = el('a', '', 'Open another map…');
+  another.href = '/choose';
+  $('empty').replaceChildren(
+    el('h2', '', 'Start your map'),
+    el('p', '', 'This map has no screens yet. Describe the first one under "New screen" and Claude creates it, or start from an example.'),
+    el('div', 'examples', null, ...examples),
+    el('div', 'where', 'Saved in', el('code', 'shotpath', DATA.folder), copyButton('', DATA.folder), another),
+  );
+  selectTab($('tabNew'));
+}
+
+// se vuelve a llamar al ocultar o mostrar flujos
+function rebuildMap(first = false) {
+  $('canvas').querySelectorAll('.zone,.node,.group').forEach(n => n.remove());
+  clearEdges();
+  Object.keys(pos).forEach(k => delete pos[k]);
+  $('flowSel').replaceChildren(...visibleFlows().map(f => new Option(f.title, f.id)));
+  updateLegend();
+  syncFlows();
+  const empty = !shownScreens().length;
+  $('empty').hidden = !empty;
+  if (empty) {
+    if (screens.length) $('empty').textContent = 'All flows are hidden. Use Flows to show some.';
+    else showEmptyMapHelp();
+    return;
+  }
+  layout();
+  drawEdges(); drawNodes(); drawGroups(); renderPills();
+  [...selected].filter(id => !pos[id]).forEach(id => selected.delete(id));
+  refreshGroupUi();
+  if (first) { zoom = clamp(viewEl.clientWidth / (bounds().x1 - LEFT), .3, 1); tx = 20; ty = 20; } // legible al abrir; "Fit" (0) muestra todo
+  applyView();
+  applySearchDim();
+  if (cur && !$('nav').hidden) renderRails();
+  if (cur) nodeEl(cur)?.classList.add('cur');  // the nodes are new: the open screen is marked again
+}
+$('flowSel').onchange = () => {
+  const f = DATA.flows.find(x => x.id === $('flowSel').value);
+  if (f?.top != null) animateTo(zoom, 20, 20 - f.top * zoom);
+};
+function syncFlows() {
+  const pop = $('flowsPop');
+  const all = Object.assign(el('button', '', 'Show all'), { onclick: () => { hidden.clear(); rebuildMap(); } });
+  pop.replaceChildren(all, ...DATA.flows.map(f => {
+    const cb = Object.assign(el('input'), { type: 'checkbox', checked: !hidden.has(f.id) });
+    cb.onchange = () => { if (cb.checked) hidden.delete(f.id); else hidden.add(f.id); rebuildMap(); };
+    const dot = el('span', 'dot'); dot.style.background = f.color;
+    return el('label', 'fl', null, cb, dot, `${f.title} (${screens.filter(sc => sc.flow === f.id).length})`);
+  }));
+  $('flowsBtn').textContent = hidden.size ? `Flows (${hidden.size} hidden)` : 'Flows';
+}
+$('flowsBtn').onclick = ev => { ev.stopPropagation(); $('flowsPop').hidden = !$('flowsPop').hidden; $('results').hidden = true; };
+let saveTimer = 0, resetArmed = false;
+function updateResetBtn() {
+  $('resetBtn').hidden = !Object.keys(custom).length;
+  $('resetBtn').textContent = resetArmed ? 'Click again to reset' : 'Reset layout';
+  $('resetBtn').classList.toggle('active', resetArmed);  // no aria-pressed: its label already says what the next click does
+}
+const setToggle = (id, on) => { $(id).classList.toggle('active', on); $(id).setAttribute('aria-pressed', String(Boolean(on))); };
+const localLayout = () => store.set(LKEY, JSON.stringify(custom));
+function saveLayout() {
+  updateResetBtn();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    if (!canAnnotate) { localLayout(); return; }  // sin servidor: se queda en este navegador
+    try {
+      const r = await callJson('layout', 'PUT', { positions: custom });
+      if (!r.ok) throw new Error(r.status);
+    } catch (e) { localLayout(); }
+  }, 350);
+}
+$('resetBtn').onclick = async () => {
+  if (!resetArmed) {  // dos pasos en vez de un diálogo modal: un confirm() bloquearía el visor
+    resetArmed = true; updateResetBtn();
+    setTimeout(() => { if (resetArmed) { resetArmed = false; updateResetBtn(); } }, 3000);
+    return;
+  }
+  resetArmed = false; custom = {};
+  store.set(LKEY, null);
+  if (canAnnotate) { try { await call('layout', { method: 'DELETE' }); } catch (e) { /* queda la local */ } }
+  updateResetBtn(); rebuildMap(); fit();
+};
+function revealFlowOf(id) {
+  const flow = byId[id]?.flow;
+  if (flow && hidden.has(flow)) { hidden.delete(flow); rebuildMap(); }
+}
+$('zin').onclick = () => zoomCenter(1.25);
+$('zout').onclick = () => zoomCenter(.8);
+$('zfit').onclick = fit;
+$('sbsBtn').hidden = !hasBefore;
+const syncSbs = () => setToggle('sbsBtn', sbs);
+syncSbs();
+$('sbsBtn').onclick = () => { sbs = !sbs; syncSbs(); store.set('sbs', sbs ? 'on' : 'off'); rebuildMap(); fit(); };
+
+// ---------- grupos ----------
+const GROUP_PAD = 24, GROUP_HEAD = 80;  // el hueco de arriba deja sitio al título del flujo y a la etiqueta del grupo
+const groupMates = id => {
+  const group = groups.find(g => g.members.includes(id));
+  return group ? group.members.filter(m => m !== id && pos[m] && nodeEl(m)).map(m => ({ id: m, ox: pos[m].x, oy: pos[m].y })) : [];
+};
+function groupBox(group) {
+  const boxes = group.members.filter(m => pos[m] && nodeEl(m)).map(screenBox);
+  if (!boxes.length) return null;
+  const x0 = Math.min(...boxes.map(b => b.x)) - GROUP_PAD, y0 = Math.min(...boxes.map(b => b.y)) - GROUP_HEAD;
+  return { x: x0, y: y0, w: Math.max(...boxes.map(b => b.x + b.w)) + GROUP_PAD - x0, h: Math.max(...boxes.map(b => b.y + b.h)) + GROUP_PAD - y0 };
+}
+function placeGroups() {
+  groups.forEach(g => {
+    const frame = $('group-' + g.id), box = groupBox(g);
+    if (frame && box) Object.assign(frame.style, { left: box.x + 'px', top: box.y + 'px', width: box.w + 'px', height: box.h + 'px' });
+  });
+}
+function drawGroups() {
+  $('canvas').querySelectorAll('.group').forEach(n => n.remove());
+  groups.filter(groupBox).forEach(g => {
+    const ungroup = el('button', 'ghost', 'Ungroup');
+    ungroup.onclick = () => saveGroups(groups.filter(other => other !== g));
+    const frame = el('div', 'group', null, el('div', 'group-label', null, el('span', '', g.name), ungroup));
+    frame.id = 'group-' + g.id;
+    $('canvas').appendChild(frame);
+  });
+  placeGroups();
+}
+let groupMsgTimer = 0;
+function groupSay(text) {
+  $('groupMsg').textContent = text;
+  clearTimeout(groupMsgTimer); groupMsgTimer = setTimeout(() => { $('groupMsg').textContent = ''; }, 5000);
+}
+// Replaces the groups and saves them; if the server refuses, the groups go back to what they were.
+async function saveGroups(next) {
+  const previous = groups;
+  groups = next; drawGroups();
+  try {
+    const r = await callJson('groups', 'PUT', { groups });
+    if (!r.ok) throw new Error((await r.json()).error);
+  } catch (e) {
+    groups = previous; drawGroups();
+    groupSay(e.message || 'The groups could not be saved.');
+  }
+}
+function refreshGroupUi() {
+  if (selected.size < 2) $('groupForm').hidden = true;
+  $('groupBtn').hidden = !canAnnotate || selected.size < 2 || !$('groupForm').hidden;
+  $('hintGroup').hidden = !canAnnotate;
+}
+// aria-pressed only while picked: a screen that is not picked is a plain button that opens the detail
+function setPicked(node, picked) {
+  if (!node) return;
+  node.classList.toggle('picked', picked);
+  if (picked) node.setAttribute('aria-pressed', 'true'); else node.removeAttribute('aria-pressed');
+}
+function toggleSelected(id) {
+  if (!selected.delete(id)) selected.add(id);
+  setPicked(nodeEl(id), selected.has(id));
+  refreshGroupUi();
+}
+function clearSelection() {
+  if (!selected.size) return;
+  selected.forEach(id => setPicked(nodeEl(id), false));
+  selected.clear(); refreshGroupUi();
+}
+function startNaming() {
+  $('groupForm').hidden = false; refreshGroupUi();
+  $('groupName').value = ''; $('groupName').focus();
+}
+$('groupBtn').onclick = startNaming;
+$('groupCancel').onclick = () => { $('groupForm').hidden = true; refreshGroupUi(); };
+$('groupName').onkeydown = e => { if (e.key === 'Escape') $('groupCancel').click(); };
+$('groupForm').onsubmit = e => {
+  e.preventDefault();
+  const name = $('groupName').value.trim();
+  if (!name) return;
+  const members = [...selected];
+  // a screen is in one group at a time: the new group takes its members from the old ones
+  const rest = groups.map(g => ({ ...g, members: g.members.filter(m => !selected.has(m)) })).filter(g => g.members.length >= 2);
+  let id = 'g' + Date.now().toString(36);
+  while (rest.some(g => g.id === id)) id += 'x';
+  clearSelection();
+  saveGroups([...rest, { id, name, members }]);
+};
+
+// ---------- navegador ----------
+let htmlOf = null;  // id of the screen whose live HTML the detail shows instead of its capture
+let trail = [], compare = false, showingBefore = false, hotspotsOn = store.get('hotspots') !== 'off';
+let histScreen = null, histVersions = [], histPick = null;  // the screen whose versions are loaded, them, and the older one the detail shows (an image path)
+const hotByEdge = new Map();
+
+// Un solo modelo: al centro la pantalla, a la izquierda de dónde viene, a la derecha a dónde puede ir.
+const backTarget = () => trail.length ? trail[trail.length - 1] : inc[cur].find(e => e.from !== cur)?.from;
+
+function railCard(edge, dir, key, here) {
+  const target = byId[dir === 'out' ? edge.to : edge.from];
+  const other = target.flow !== byId[cur].flow ? flowOf[target.flow].title : '';
+  const first = dir === 'out'
+    ? el('span', 'a', null, ...(key < 10 ? [el('i', '', key)] : []), edge.action)
+    : el('span', 'a', target.title);
+  const second = el('span', 't', dir === 'out' ? target.title : `via “${edge.action}”`);
+  const b = el('button', 'rcard' + (here ? ' here' : ''), null, thumbImg(thumbOf(target)),
+    el('span', '', null, first, second, ...(other ? [el('span', 'm', 'in ' + other)] : []), ...(here ? [el('span', 'm', 'you came from here')] : [])));
+  b.onclick = () => (here && trail.length ? goBack() : go(target.id));
+  if (dir === 'out') {
+    b.onmouseenter = () => hotByEdge.get(edge)?.classList.add('hl');
+    b.onmouseleave = () => hotByEdge.get(edge)?.classList.remove('hl');
+  }
+  return b;
+}
+
+// Camino mostrado arriba: lo recorrido, precedido por el camino más corto desde la entrada hasta donde empezaste (mapa o buscador).
+function route() {
+  const start = trail.length ? trail[0] : cur;
+  const prev = { [DATA.entry]: null }, queue = [DATA.entry];
+  for (const id of queue) out[id].forEach(e => { if (!(e.to in prev)) { prev[e.to] = id; queue.push(e.to); } });
+  const head = [];
+  if (start in prev) for (let id = prev[start]; id != null; id = prev[id]) head.unshift(id);
+  return [...head, ...trail, cur];
+}
+
+function renderRoute() {
+  const ids = route(), last = ids.length - 1;
+  const chips = ids.map((id, i) => {
+    const n = out[id].length, taken = i < last ? out[id].findIndex(e => e.to === ids[i + 1]) + 1 : 0;
+    const fork = n > 1 ? [el('i', 'fork', i < last ? `⑂ took ${taken || '?'} of ${n}` : `⑂ ${n} paths ahead`)] : [];
+    const b = el('button', 'chip' + (i === last ? ' cur' : ''), null, thumbImg(thumbOf(byId[id])),
+      el('span', '', null, el('span', 't', byId[id].title), ...fork));
+    b.title = i === last ? 'You are here' : 'Go back to this screen';
+    if (i < last) b.onclick = () => jumpTo(ids, i);
+    return b;
+  });
+  const fork = ids.findLastIndex((id, i) => i < last && out[id].length > 1);
+  $('toFork').hidden = fork < 0;
+  $('toFork').onclick = () => jumpTo(ids, fork);
+  const bar = $('route');
+  bar.replaceChildren(...chips.flatMap((c, i) => i ? [el('span', 'sep', '›'), c] : [c]));
+  bar.scrollLeft = bar.scrollWidth;
+}
+
+function renderRails() {
+  const ins = inc[cur].filter(e => e.from !== cur), back = backTarget(), n = out[cur].length;
+  $('outRail').classList.toggle('fork', n > 1);
+  $('outHint').textContent = n > 1 ? `Fork: ${n} paths from here. Pick one; ← comes back to try another.` : n === 1 ? 'One path. → continues.' : '';
+  $('inHint').textContent = ins.length > 1 ? `${ins.length} screens lead here. ← goes back to the one you came from.` : '← goes back';
+  $('inCount').textContent = ins.length;
+  $('inList').replaceChildren(...(ins.length ? ins.map(e => railCard(e, 'in', null, e.from === back)) : [el('p', 'rempty', 'Start of the flow.')]));
+  $('outCount').textContent = out[cur].length;
+  const outs = out[cur].map((e, i) => {
+    const c = railCard(e, 'out', i + 1);
+    if (n > 1 && taken.get(cur) === e.to) { c.classList.add('taken'); c.lastChild.append(el('span', 'm', 'you went this way')); }
+    return c;
+  });
+  front[cur].forEach(f => outs.push(Object.assign(el('button', 'rcard f', 'Not explored yet: ' + f.action), { disabled: true })));
+  $('outList').replaceChildren(...(outs.length ? outs : [el('p', 'rempty', 'End of the branch: no more options recorded.')]));
+}
+
+const HTML_NOTE = 'Live HTML. Comments and Before|After use the capture.';
+let htmlFailed = false;
+
+/** Scales the mock's iframe, laid out at the screen's own size, to the box the capture would take. */
+function fitHtml(s) {
+  const w = s.width > 0 ? s.width : 390, h = s.height > 0 ? s.height : 844;
+  const scale = Math.min(1, ($('shotArea').clientWidth - 32) / w, innerHeight * 0.48 / h);
+  Object.assign($('htmlBox').style, { width: w * scale + 'px', height: h * scale + 'px' });
+  Object.assign($('htmlFrame').style, { width: w + 'px', height: h + 'px', transform: `scale(${scale})` });
+}
+
+async function loadHtml(s) {
+  const frame = $('htmlFrame');
+  fitHtml(s);
+  if (frame.dataset.src === s.html) return;
+  frame.dataset.src = s.html; htmlFailed = false;
+  $('htmlNote').textContent = HTML_NOTE;
+  $('htmlBox').hidden = false;
+  // an iframe does not say whether its page loaded, so ask first
+  const found = (await fetch(s.html, { cache: 'no-store' }).catch(() => null))?.ok;
+  if (frame.dataset.src !== s.html) return;  // the detail moved on while asking
+  if (found) { frame.src = s.html; return; }
+  htmlFailed = true; $('htmlBox').hidden = true; $('htmlNote').textContent = 'HTML not available';
+}
+
+/** The detail shows the screen's capture, or its live HTML when the designer picked it (never while comparing or annotating). */
+function renderViewMode() {
+  const s = byId[cur], frame = $('htmlFrame');
+  const hasHtml = Boolean(s?.html);
+  const shown = hasHtml && htmlOf === cur && !compare && !showingBefore && !annotating;
+  $('viewToggle').hidden = !hasHtml;
+  $('viewCapture').classList.toggle('active', !shown);
+  $('viewHtml').classList.toggle('active', shown);
+  $('viewCapture').setAttribute('aria-pressed', String(!shown));
+  $('viewHtml').setAttribute('aria-pressed', String(shown));
+  $('viewHtml').disabled = annotating;
+  $('shot').hidden = $('ann').hidden = shown;
+  $('htmlBox').hidden = !shown || htmlFailed;
+  $('htmlNote').hidden = !shown;
+  if (shown) { void loadHtml(s); return; }
+  delete frame.dataset.src; frame.removeAttribute('src'); htmlFailed = false;  // unload it, so a later visit shows the file as it is then
+  placeOverlay();
+}
+$('viewCapture').onclick = () => { htmlOf = null; renderViewMode(); };
+$('viewHtml').onclick = () => { compare = false; showingBefore = false; htmlOf = cur; render(); };
+addEventListener('resize', () => { if ($('htmlBox').offsetParent && byId[cur]) fitHtml(byId[cur]); });
+
+const versionLabel = v => v ? (v.capturedAt ? v.capturedAt.slice(0, 16).replace('T', ' ') + ' UTC' : 'no date') : 'an older capture';
+const histLabel = () => versionLabel(histVersions.find(v => v.image === histPick));
+function compareNote() {
+  if (compare) return histPick ? `Left: ${histLabel()} · Right: current.` : 'Left: before · Right: after.';
+  if (!showingBefore) return '';
+  return histPick ? `Showing the capture of ${histLabel()}. Press C to compare.` : 'Showing the current app (before). Press C to compare.';
+}
+async function loadHistory(id) {
+  const res = await fetch('/__flowmap-app/history?screen=' + encodeURIComponent(id)).catch(() => null);
+  const body = res?.ok ? await res.json().catch(() => null) : null;
+  if (histScreen !== id) return;  // the detail moved on while asking
+  histVersions = body?.versions ?? [];
+  renderHistory();
+}
+function renderHistory() {
+  $('history').hidden = histVersions.length < 2;
+  $('histCount').textContent = histVersions.length;
+  $('histStrip').replaceChildren(...histVersions.map(v => {
+    const shown = histPick ? histPick === v.image : v.current;
+    const b = el('button', shown ? 'active' : '', versionLabel(v) + (v.current ? ' · current' : ''));
+    b.setAttribute('aria-pressed', String(Boolean(shown)));
+    b.onclick = () => { histPick = v.current ? null : v.image; compare = false; showingBefore = Boolean(histPick); render(); };
+    return b;
+  }));
+  $('histCmp').hidden = !histPick;
+  setToggle('histCmp', compare);
+  $('cmpNote').textContent = compareNote();  // names the version once the list has arrived
+}
+
+function render() {
+  const s = byId[cur], flow = flowOf[s.flow];
+  if (histScreen !== cur) { histScreen = cur; histVersions = []; histPick = null; loadHistory(cur); }
+  const before = histPick || beforeOf(s);
+  if (!before) { compare = false; showingBefore = false; }
+  if (compare) showingBefore = false;
+  const main = showingBefore ? before : s.image;
+  $('shot').src = main; $('shot').alt = s.title + (showingBefore ? ' (before)' : '');
+  $('annBtn').disabled = $('wholeBtn').disabled = showingBefore;  // las anotaciones recortan la captura nueva
+  if (showingBefore) setAnnotating(false);
+  $('cmpBtn').hidden = !before;
+  $('shotPrev').hidden = !compare;
+  setToggle('cmpBtn', compare);
+  if (compare) $('shotPrev').src = before;
+  $('stage').classList.toggle('cmp', compare);
+  renderViewMode();
+  $('kicker').textContent = `${flow.title} · ${s.id}`;
+  $('kdot').style.background = flow.color;
+  $('stitle').textContent = s.title;
+  $('sdesc').textContent = s.description || '';
+  const links = $('links'); links.replaceChildren(el('a', '', 'Original'));
+  links.firstChild.href = main; links.firstChild.target = '_blank';
+  if (s.meta?.evidence) { const a = Object.assign(el('a', '', 'Screen text'), { href: s.meta.evidence, target: '_blank' }); links.append(' · ', a); }
+  if (s.capturedAt) links.append(' · ' + s.capturedAt.slice(0, 10));
+  $('back').disabled = !backTarget();
+
+  const ch = $('change');
+  ch.hidden = s.status !== 'changed';
+  if (!ch.hidden) {
+    const c = s.lastChange || {};
+    ch.replaceChildren(
+      `This screen changed in the last capture${c.similarity != null ? ` (similarity ${c.similarity})` : ''}.`,
+      ...(c.removed || []).map(l => el('code', 'del', '− ' + l)),
+      ...(c.added || []).map(l => el('code', 'add', '+ ' + l)));
+  }
+
+  renderRoute(); renderRails();
+  $('shotMsg').replaceChildren();
+  $('exportMsg').replaceChildren(...(exporting && cur === exportTarget ? [EXPORT_PROGRESS] : []));  // the progress belongs to the screen the export was started for
+  renderHistory();
+  $('recapture').hidden = !cur;
+  updateTargetControls();
+  history.replaceState(null, '', '#/s/' + cur);
+  cancelForm(); placeOverlay(); refreshAnn();
+  selectOnMap(cur);
+}
+
+const taken = new Map();  // pantalla que bifurca -> salida que tomaste la última vez
+function go(id) { revealFlowOf(id); taken.set(cur, id); trail.push(cur); cur = id; render(); }
+function jumpTo(ids, i) { trail = ids.slice(0, i); revealFlowOf(ids[i]); cur = ids[i]; render(); }
+function goBack() {
+  if (trail.length) cur = trail.pop();
+  else { const t = backTarget(); if (!t) return; revealFlowOf(t); cur = t; }  // sin recorrido (saltaste desde el mapa o el buscador): sube al origen en el grafo
+  render();
+}
+function openNav(id, fresh, side = 'after') {
+  if (!byId[id]) return;
+  revealFlowOf(id);
+  if (fresh) trail = [];
+  const prev = cur;
+  cur = id; showingBefore = side === 'before'; $('nav').hidden = false; render();
+  if (prev !== cur) redrawEdgesOf(new Set([prev, cur].filter(Boolean)));
+}
+function closeNav() {
+  if (histPick) { histPick = null; compare = showingBefore = false; }
+  $('nav').hidden = true; history.replaceState(null, '', location.pathname);  // la pantalla queda marcada en el mapa
+  updateTargetControls();
+}
+
+// the controls that act on "the open screen" name it, and wait while no screen is open
+function updateTargetControls() {
+  const open = Boolean(cur) && !$('nav').hidden;
+  $('rcSend').disabled = !open;
+  $('rcSend').textContent = open ? `Re-capture “${byId[cur].title}”` : 'Re-capture this screen';
+  $('nsFrom').disabled = !open;
+  if (!open) $('nsFrom').checked = false;
+  updateExportButton();
+}
+// server-only, and the server has no route to the entry screen (400)
+function updateExportButton() {
+  $('exportRoute').hidden = !serverAnswered;
+  $('exportRoute').disabled = exporting || cur === DATA.entry;
+}
+$('back').onclick = goBack;
+$('toMap').onclick = closeNav;
+$('navBtn').onclick = () => openNav(cur || DATA.entry, !cur);
+addEventListener('keydown', e => {
+  if ($('nav').hidden) return;
+  if (e.target.matches('textarea,input,[role=tab]') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Escape' && (annotating || pending)) { cancelForm(); setAnnotating(false); return; }
+  if (e.key.toLowerCase() === 'a' && canAnnotate && !showingBefore) { setAnnotating(!annotating); return; }
+  if (e.key.toLowerCase() === 'w' && canAnnotate && !showingBefore) { startWhole(); return; }
+  if (e.key.toLowerCase() === 'b' && !$('toFork').hidden) { $('toFork').click(); return; }
+  if (e.key.toLowerCase() === 'h' && !$('hotBtn').hidden) { toggleHot(); return; }
+  if (e.key.toLowerCase() === 'c' && !$('cmpBtn').hidden) { toggleCompare(); return; }
+  const choices = out[cur];
+  if (e.key === 'Escape') closeNav();
+  else if (e.key === 'ArrowLeft' || e.key === 'Backspace') goBack();
+  else if (e.key === 'ArrowRight' && choices[0]) go(choices[0].to);
+  else if (/^[1-9]$/.test(e.key) && choices[e.key - 1]) go(choices[e.key - 1].to);
+});
+
+// ---------- buscador ----------
+const norm = t => (t || '').toLowerCase();
+const hay = Object.fromEntries(screens.map(sc => [sc.id, {
+  title: norm(sc.title),
+  rest: norm([flowOf[sc.flow].title, sc.description, ...out[sc.id].map(e => e.action), ...inc[sc.id].map(e => e.action)].join(' ')),
+  text: (DATA.search || {})[sc.id] || '',
+}]));
+let matches = null, sel = 0;
+function search(q) {
+  const words = norm(q).split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+  return screens.map(sc => {
+    let score = 0;
+    for (const w of words) {
+      const h = hay[sc.id];
+      if (h.title.includes(w)) score += 3; else if (h.rest.includes(w)) score += 2; else if (h.text.includes(w)) score += 1; else return null;
+    }
+    return { sc, score, words };
+  }).filter(Boolean).sort((a, b) => b.score - a.score);
+}
+function snippet(r) {
+  const text = hay[r.sc.id].text, w = r.words.find(x => text.includes(x) && !hay[r.sc.id].title.includes(x));
+  if (!w) return '';
+  const i = text.indexOf(w);
+  return '…' + text.slice(Math.max(0, i - 25), i + 50) + '…';
+}
+function applySearchDim() {
+  document.querySelectorAll('.node').forEach(n => n.classList.toggle('dim', !!matches && !matches.has(nodeId(n))));
+}
+function showResults(found) {
+  const pop = $('results');
+  matches = found && new Set(found.map(r => r.sc.id));
+  applySearchDim();
+  pop.hidden = !found;
+  if (!found) return;
+  sel = 0;
+  pop.replaceChildren(...(found.length ? found.slice(0, 30).map((r, i) => {
+    const b = el('button', 'res' + (i === 0 ? ' sel' : ''), null, thumbImg(thumbOf(r.sc)), el('span', '', null,
+      el('span', 'a', r.sc.title + (hidden.has(r.sc.flow) ? ' (hidden flow)' : '')),
+      el('span', 't', `${flowOf[r.sc.flow].title} · ${r.sc.id}`), el('span', 't', snippet(r))));
+    b.onclick = () => pickResult(r.sc.id);
+    return b;
+  }) : [el('div', 'links', 'No screens match.')]));
+}
+function pickResult(id) {
+  $('results').hidden = true;
+  openNav(id, true);
+}
+function bindSearch(input) {
+  input.oninput = () => showResults(search(input.value));
+  input.onfocus = () => { $('flowsPop').hidden = true; if (input.value) showResults(search(input.value)); };
+  input.onkeydown = ev => {
+    const items = [...$('results').querySelectorAll('.res')];
+    if (ev.key === 'Escape') { input.value = ''; showResults(null); input.blur(); }
+    else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      if (items.length) { sel = (sel + (ev.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length; items.forEach((n, i) => n.classList.toggle('sel', i === sel)); items[sel].scrollIntoView({ block: 'nearest' }); }
+    } else if (ev.key === 'Enter' && items[sel]) items[sel].click();
+  };
+}
+bindSearch($('q'));
+
+// ---------- cambios: cada captura de cada pantalla, la más nueva primero ----------
+function openChange(change) {
+  $('changesPop').hidden = true;
+  openNav(change.screen, true);
+  histPick = change.current ? null : change.image;
+  compare = false; showingBefore = Boolean(histPick);
+  render();
+}
+async function showChanges() {
+  const pop = $('changesPop');
+  pop.hidden = false; $('results').hidden = true; $('flowsPop').hidden = true;
+  pop.replaceChildren(el('div', 'links', 'Loading…'));
+  const res = await fetch('/__flowmap-app/changes').catch(() => null);
+  const body = res?.ok ? await res.json().catch(() => null) : null;
+  const events = (body?.events ?? []).filter(change => byId[change.screen]);
+  pop.replaceChildren(...(events.length ? events.map(change => {
+    const b = el('button', 'res', null, thumbImg(change.image), el('span', '', null,
+      el('span', 'a', change.title),
+      el('span', 't', versionLabel(change) + (change.current ? ' · current' : ''))));
+    b.onclick = () => openChange(change);
+    return b;
+  }) : [el('div', 'links', body ? 'No captures yet.' : 'Could not load the changes.')]));
+}
+$('changesBtn').onclick = ev => { ev.stopPropagation(); if ($('changesPop').hidden) showChanges(); else $('changesPop').hidden = true; };
+addEventListener('keydown', e => {
+  if (e.key === '/' && !e.target.matches('input,textarea') && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault(); $('q').focus();
+  }
+});
+addEventListener('click', e => {
+  if (!e.target.closest('.pop, #flowsBtn, #changesBtn, input[type=search]')) { $('results').hidden = true; $('flowsPop').hidden = true; $('changesPop').hidden = true; }
+});
+
+// ---------- anotaciones (requieren `flowmap.py serve`) ----------
+let attachChosen = false;  // once the designer ticks or unticks "Attach my comments", the default stops following the comments
+let anns = [], canAnnotate = false, annotating = false, pending = null, drag = null, editing = null, clearArmed = false;
+const call = (url, opts = {}) => fetch('__flowmap/' + url, { ...opts, headers: { 'X-Flowmap': '1', ...(opts.headers || {}) } });
+const postJson = (url, body, method = 'POST') => fetch(url, { method, headers: { 'X-Flowmap': '1', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+const callJson = (url, method, body) => postJson('__flowmap/' + url, body, method);
+const say = text => { $('annMsg').textContent = text; };
+
+function placeOverlay() {
+  const img = $('shot'), ov = $('ann');
+  Object.assign(ov.style, { left: img.offsetLeft + 'px', top: img.offsetTop + 'px', width: img.offsetWidth + 'px', height: img.offsetHeight + 'px' });
+}
+function setAnnotating(on) {
+  annotating = on && canAnnotate;
+  if (annotating) htmlOf = null;
+  $('ann').classList.toggle('on', annotating);
+  setToggle('annBtn', annotating);
+  $('annBanner').hidden = !annotating;
+  renderViewMode();
+  say(annotating ? 'Drag to mark an area, or click once for the whole screen.' : '');
+}
+function startWhole() {
+  htmlOf = null; renderViewMode();
+  cancelForm(); pending = { x: 0, y: 0, w: 1, h: 1 }; drawOverlay();
+  $('annForm').hidden = false; $('annText').focus(); say('Write what you want for the whole screen.');
+}
+function cancelForm() {
+  pending = null; drag = null; editing = null; clearArmed = false;
+  $('annForm').hidden = true; $('annText').value = '';
+  if (annotating) say('Drag to mark an area, or click once for the whole screen.');
+}
+function boxEl(rect, cls, label) {
+  const b = el('div', cls, null, ...(label ? [el('b', '', label)] : []));
+  Object.assign(b.style, { left: rect.x * 100 + '%', top: rect.y * 100 + '%', width: rect.w * 100 + '%', height: rect.h * 100 + '%' });
+  return b;
+}
+function drawOverlay() {
+  const kids = [], list = out[cur];
+  hotByEdge.clear();
+  if (hotspotsOn) list.forEach(e => {
+    if (!e.at) return;
+    const h = boxEl(e.at, 'hot');
+    h.title = e.action; h.onclick = () => go(e.to);
+    hotByEdge.set(e, h); kids.push(h);
+  });
+  anns.filter(a => a.screen === cur).forEach((a, i) => kids.push(boxEl(a.rect, 'annbox', i + 1)));
+  if (pending) kids.push(boxEl(pending, 'annbox draft'));
+  $('ann').replaceChildren(...kids);
+  $('hotBtn').hidden = !list.some(e => e.at);
+  setToggle('hotBtn', hotspotsOn);
+}
+function toggleHot() {
+  hotspotsOn = !hotspotsOn;
+  store.set('hotspots', hotspotsOn ? 'on' : 'off');
+  drawOverlay();
+}
+function toggleCompare() { compare = !compare; showingBefore = Boolean(histPick) && !compare; render(); }
+$('hotBtn').onclick = toggleHot;
+$('cmpBtn').onclick = toggleCompare;
+$('histCmp').onclick = toggleCompare;
+function renderPills() {
+  const counts = {};
+  anns.forEach(a => { counts[a.screen] = (counts[a.screen] || 0) + 1; });
+  document.querySelectorAll('.apill').forEach(n => n.remove());
+  Object.entries(counts).forEach(([id, n]) => nodeEl(id)?.querySelector('.tag')?.append(el('span', 'pill apill', '✎' + n)));
+}
+function refreshAnn() {
+  $('annWrap').hidden = !canAnnotate;
+  $('annHint').hidden = canAnnotate || $('nav').hidden;
+  $('copyTop').hidden = !canAnnotate || !anns.length;
+  $('copyTop').textContent = `Copy annotations (${anns.length})`;
+  $('copyAll').textContent = `Copy for Claude (${anns.length})`;
+  $('copyAll').disabled = !anns.length;
+  $('askAttachText').textContent = `Attach my comments (${anns.length})`;
+  $('annCount').textContent = anns.filter(a => a.screen === cur).length;
+  if (!attachChosen) $('askAttach').checked = anns.length > 0;
+  renderPills();
+  if (!cur) return;
+  const mine = anns.filter(a => a.screen === cur);
+  drawOverlay();
+  const list = $('annList'); list.replaceChildren();
+  mine.forEach((a, i) => {
+    const copy = el('button', 'ghost', 'Copy crop'), edit = el('button', 'ghost', 'Edit'), del = el('button', 'ghost danger', 'Delete');
+    copy.onclick = () => copyCrop(a); edit.onclick = () => startEdit(a); del.onclick = () => removeAnn(a);
+    list.append(el('div', 'ann', null, el('span', 'num', i + 1), el('div', 'abody', null, el('p', '', a.comment), el('div', 'acts', null, copy, edit, del))));
+  });
+  if (mine.length) list.append(Object.assign(el('button', 'ghost danger' + (clearArmed ? ' active' : ''), clearArmed ? 'Click again to clear this screen' : 'Clear this screen'), { onclick: clearScreen }));
+}
+async function copyCrop(a) {
+  try {
+    const blob = await (await fetch(a.crop)).blob();
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    say('Crop copied: paste it into Claude with Ctrl+V.');
+  } catch (e) { say('The browser blocked copying the image. The file is at ' + a.crop); }
+}
+async function copyShot() {
+  const msg = $('shotMsg');
+  try {
+    // The blob is given as a promise so the browser still counts the click as the gesture that allows writing.
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngOf(byId[cur].image) })]);
+    msg.textContent = 'Copied: paste it into Claude with Ctrl+V.';
+  } catch (e) { await showCapturePath(msg); }
+}
+async function pngOf(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(res.status);
+  const blob = await res.blob();
+  if (blob.type === 'image/png') return blob;
+  const bitmap = await createImageBitmap(blob), canvas = document.createElement('canvas');
+  canvas.width = bitmap.width; canvas.height = bitmap.height;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0);
+  return new Promise(done => canvas.toBlob(done, 'image/png'));
+}
+async function showCapturePath(msg) {
+  let path;
+  try {
+    const res = await fetch('/__flowmap-app/capture-path?screen=' + encodeURIComponent(cur));
+    if (!res.ok) throw new Error(res.status);
+    path = (await res.json()).path;
+  } catch (e) { msg.textContent = 'Could not copy the screenshot or find its path.'; return; }
+  msg.replaceChildren('The browser blocked copying the image. Claude Code can read this path:', el('code', 'shotpath', path), copyButton('ghost', path));
+}
+async function exportRouteVideo() {
+  const msg = $('exportMsg'), target = cur;
+  const finish = (...content) => msg.replaceChildren(...(cur === target ? content : []));  // the message belongs to the screen the export was started for
+  exporting = true; exportTarget = target; updateExportButton();
+  msg.replaceChildren(EXPORT_PROGRESS);
+  try {
+    const res = await postJson('/__flowmap-app/export-route', { to: target });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) { finish(body.error || 'Could not export the route video.'); return; }
+    const copy = copyButton('ghost', body.path);
+    copy.id = 'exportCopy';
+    finish('Saved: ', el('code', 'shotpath', body.path), copy);
+  } catch (e) { finish('Could not reach the app to export the route video.'); }
+  finally { exporting = false; updateExportButton(); }
+}
+async function copyForClaude() {
+  try {
+    await navigator.clipboard.writeText(await (await call('export')).text());
+    say('Text copied: paste it into Claude. It includes the crop paths.');
+  } catch (e) { say('The browser blocked copying the text.'); }
+}
+async function removeAnn(a) {
+  const r = await call('annotations/' + a.id, { method: 'DELETE' });
+  if (r.ok) { anns = anns.filter(x => x.id !== a.id); refreshAnn(); } else say('Could not delete.');
+}
+function cropDataUrl(rect) {
+  const img = $('shot'), W = img.naturalWidth, H = img.naturalHeight, c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(rect.w * W)); c.height = Math.max(1, Math.round(rect.h * H));
+  c.getContext('2d').drawImage(img, rect.x * W, rect.y * H, rect.w * W, rect.h * H, 0, 0, c.width, c.height);
+  return c.toDataURL('image/png');
+}
+function startEdit(a) {
+  cancelForm(); editing = a; $('annText').value = a.comment;
+  $('annForm').hidden = false; $('annText').focus(); say('Editing the note: change the text and save.');
+}
+async function saveEdit(comment) {
+  if (!comment) { say('Write a comment.'); return; }
+  const r = await callJson('annotations/' + editing.id, 'PATCH', { comment });
+  const body = await r.json();
+  if (!r.ok) { say('Not saved: ' + body.error); return; }
+  anns = anns.map(a => a.id === body.id ? body : a); cancelForm(); say('Note updated.'); refreshAnn();
+}
+async function clearScreen() {
+  if (!clearArmed) {  // dos pasos en vez de un diálogo modal: un confirm() bloquearía el visor
+    clearArmed = true; refreshAnn();
+    setTimeout(() => { if (clearArmed) { clearArmed = false; refreshAnn(); } }, 3000);
+    return;
+  }
+  const r = await call('annotations?screen=' + encodeURIComponent(cur), { method: 'DELETE' });
+  clearArmed = false;
+  if (r.ok) anns = anns.filter(a => a.screen !== cur); else say('Could not clear.');
+  refreshAnn();
+}
+async function saveAnn() {
+  const comment = $('annText').value.trim();
+  if (editing) return saveEdit(comment);
+  if (!pending || !comment) { say('Write a comment.'); return; }
+  const r = await callJson('annotations', 'POST', { screen: cur, rect: pending, comment, png: cropDataUrl(pending) });
+  const body = await r.json();
+  if (!r.ok) { say('Not saved: ' + body.error); return; }
+  anns.push(body); cancelForm(); say('Saved to ' + body.crop); refreshAnn();
+}
+const point = (ev, box) => ({ x: clamp((ev.clientX - box.left) / box.width, 0, 1), y: clamp((ev.clientY - box.top) / box.height, 0, 1) });
+const rectOf = (a, b) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) });
+$('ann').onpointerdown = ev => {
+  if (!annotating) return;
+  cancelForm(); drag = point(ev, $('ann').getBoundingClientRect()); $('ann').setPointerCapture(ev.pointerId);
+};
+$('ann').onpointermove = ev => {
+  if (!drag) return;
+  pending = rectOf(drag, point(ev, $('ann').getBoundingClientRect())); drawOverlay();
+};
+$('ann').onpointerup = () => {
+  if (!drag) return;
+  drag = null;
+  if (!pending || pending.w < .01 || pending.h < .01) { startWhole(); return; }  // un clic sin arrastrar marca toda la pantalla
+  $('annForm').hidden = false; $('annText').focus(); say('Write what you want for this area.');
+};
+$('annText').onkeydown = ev => { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) saveAnn(); else if (ev.key === 'Escape') { cancelForm(); refreshAnn(); } };
+$('annSave').onclick = saveAnn;
+$('annCancel').onclick = () => { cancelForm(); refreshAnn(); };
+$('annBtn').onclick = () => setAnnotating(!annotating);
+$('wholeBtn').onclick = startWhole;
+$('copyAll').onclick = copyForClaude;
+$('copyShot').onclick = copyShot;
+$('exportRoute').onclick = exportRouteVideo;
+$('copyTop').onclick = copyForClaude;
+$('shot').onload = placeOverlay;
+addEventListener('resize', placeOverlay);
+async function loadAnns() {
+  try {
+    const r = await call('annotations');
+    if (!r.ok) throw new Error(r.status);
+    anns = await r.json(); canAnnotate = true;
+  } catch (e) { canAnnotate = false; }
+  refreshAnn();
+  if (canAnnotate) {  // con servidor manda la disposición guardada en la carpeta, no la que haya quedado en este navegador
+    await Promise.all([loadLayout(), loadGroups()]);
+    updateResetBtn(); rebuildMap();
+  }
+}
+async function loadLayout() {
+  try {
+    custom = known((await (await call('layout')).json()).positions);
+  } catch (e) { /* se queda con la embebida */ }
+}
+async function loadGroups() {
+  try {
+    const r = await call('groups');
+    const body = await r.json();
+    if (!r.ok) throw new Error(body.error);
+    groups = body.groups;
+  } catch (e) { groupSay(e.message || 'The groups could not be read.'); }
+}
+
+// ---------- pedir cambios a la sesión de Claude Code ligada al mapa ----------
+$('askAttach').onchange = () => { attachChosen = true; };
+// the dock's three panes, one shown at a time (each tab names its pane in aria-controls); what Claude answers always goes to the "Change the map" pane, so that is the one shown
+const dockTabs = [...document.querySelectorAll('#dockTabs [role=tab]')];
+function selectTab(selected) {
+  for (const tab of dockTabs) {
+    tab.setAttribute('aria-selected', String(tab === selected));
+    tab.tabIndex = tab === selected ? 0 : -1;
+    $(tab.getAttribute('aria-controls')).hidden = tab !== selected;
+  }
+}
+dockTabs.forEach(tab => { tab.onclick = () => selectTab(tab); });
+// the tabs pattern: arrows move between the tabs (wrapping), Home and End jump to the ends; the selected tab is the only one in the Tab order
+$('dockTabs').addEventListener('keydown', ev => {
+  const last = dockTabs.length - 1, at = dockTabs.indexOf(ev.target);
+  const to = { ArrowRight: at === last ? 0 : at + 1, ArrowLeft: at === 0 ? last : at - 1, Home: 0, End: last }[ev.key];
+  if (at < 0 || to === undefined) return;
+  ev.preventDefault();
+  selectTab(dockTabs[to]);
+  dockTabs[to].focus();
+});
+const askSay = text => { $('askMsg').textContent = text; $('runMsg').textContent = text; selectTab($('tabChange')); };
+let sessionAlive = true;  // what the last status answer said; new screens and re-captures go to the app's own Claude when it is false
+async function showAskBox() {
+  try {
+    const reply = await fetch('/__flowmap-app/session');
+    if (!reply.ok) return;
+    const session = await reply.json();
+    serverAnswered = true; updateExportButton();
+    sessionAlive = Boolean(session.alive);  // a map that is not linked reports no `alive`: it asks the app's own Claude
+    $('ask').hidden = false;
+    $('askState').textContent = !session.linked ? 'Runs on its own' : sessionAlive ? 'Session linked' : 'Session gone';
+    $('askState').title = !session.linked ? 'No session is linked: Claude runs on its own and asks you to approve commands'
+      : sessionAlive ? 'Requests go to the Claude Code session linked to this map' : 'The linked session is not open any more: relink it, or run with a new Claude';
+    $('askState').className = !session.linked ? '' : sessionAlive ? 'ok' : 'warn';
+    $('askWorker').hidden = !session.linked || sessionAlive;
+    $('designContract').hidden = false;
+  } catch (e) { /* sin servidor no hay a quién pedir */ }
+}
+setInterval(() => { if (!document.hidden) showAskBox(); }, 10000);
+$('askHelpBtn').onclick = async () => {
+  const panel = $('askHelp');
+  panel.hidden = !panel.hidden;
+  $('askHelpBtn').setAttribute('aria-expanded', String(!panel.hidden));
+  if (panel.hidden) return;
+  try {
+    const help = await (await fetch('/__flowmap-app/session-help')).json();
+    if (!Array.isArray(help.steps)) throw new Error(help.error || 'no help');
+    const steps = document.createElement('ol');
+    for (const step of help.steps) { const item = document.createElement('li'); item.textContent = step; steps.append(item); }
+    const settings = document.createElement('pre');
+    settings.textContent = help.settings;
+    panel.replaceChildren(steps, settings);
+  } catch (e) { panel.textContent = 'Could not load the instructions.'; }
+};
+// Asks Claude through one of the app's endpoints and says what came of it. A started worker run is followed by pollRun,
+// which calls `clear` when it is done; the answer of the session calls it at once. Returns true while a run is being followed.
+// `startsRun`: the button only starts the app's own Claude, so it has no session to report on.
+const sendToClaude = (endpoint, payload, options) => postRequest('/__flowmap-app/' + endpoint, payload, options);
+async function postRequest(path, body, options) {
+  const { clear, startsRun = false } = options;
+  try {
+    const r = await postJson(path, body);
+    const answer = await r.json().catch(() => ({}));
+    if (r.status === 202) { runMemory.set(answer.runId); pollRun(answer.runId, clear, () => { clear.remember(); return postRequest(path, body, options); }); askSay('Running…'); return true; }  // after pollRun: the card is on screen, so the status line is announced
+    if (r.ok) { clear(); askSay('Sent to the linked session'); }
+    else if (r.status === 429) askSay((answer.error || 'Too many requests.') + ' Try again in ' + r.headers.get('Retry-After') + ' s.');
+    else { askSay(answer.error || (startsRun ? 'Could not start.' : 'Could not send.')); if (!startsRun && r.status === 409) showAskBox(); }
+  } catch (e) { askSay('Could not reach the app.'); }
+  clear.forget();  // no run is followed: what this call sent is not waiting on an answer (another request's values stay)
+  return false;
+}
+const requestPayload = extra => ({ text: $('askText').value, screen: cur || undefined, attach: $('askAttach').checked, images: askImages.length ? askImages.map(image => image.url) : undefined, ...extra });
+// images pasted into the request box, shown as thumbnails under it; the app takes at most 3 PNG or JPEG of 5 MB each
+const MAX_ASK_IMAGES = 3, MAX_ASK_IMAGE_BYTES = 5 * 1024 * 1024;
+let askImages = [];
+function showAskImages() {
+  const strip = $('askImages');
+  strip.replaceChildren(...askImages.map(image => {
+    const thumb = document.createElement('span');
+    thumb.className = 'thumb';
+    const picture = document.createElement('img');
+    picture.src = image.url;
+    picture.alt = 'Attached image';
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', 'Remove this image');
+    remove.onclick = () => { askImages = askImages.filter(other => other !== image); showAskImages(); };
+    thumb.append(picture, remove);
+    return thumb;
+  }));
+  strip.hidden = askImages.length === 0;
+}
+const readAsDataUrl = file => new Promise((done, fail) => { const reader = new FileReader(); reader.onload = () => done(reader.result); reader.onerror = fail; reader.readAsDataURL(file); });
+const takesImage = file => /^image\/(png|jpeg)$/.test(file.type);
+async function addAskImages(files) {
+  for (const file of files) {
+    if (askImages.length >= MAX_ASK_IMAGES) { askSay('At most ' + MAX_ASK_IMAGES + ' images per request.'); break; }
+    if (file.size > MAX_ASK_IMAGE_BYTES) { askSay('That image is over 5 MB.'); continue; }
+    askImages = [...askImages, { url: await readAsDataUrl(file) }];
+  }
+  showAskImages();
+}
+$('askText').addEventListener('paste', async ev => {
+  const files = [...ev.clipboardData.items].filter(item => item.kind === 'file' && takesImage({ type: item.type })).map(item => item.getAsFile());
+  if (files.length === 0) return;  // a text paste, or an image type the app does not take: the box handles it as usual
+  ev.preventDefault();
+  await addAskImages(files);
+});
+$('askAttachBtn').onclick = () => $('askFile').click();
+$('askFile').onchange = async () => {
+  await addAskImages([...$('askFile').files].filter(takesImage));
+  $('askFile').value = '';
+};
+// what a request sent: the text as before and the images that were attached, unless the designer changed them since
+const clearRequest = () => {
+  const clearText = clearIfUnchanged($('askText'));
+  const sent = askImages;
+  const clear = () => { clearText(); if (askImages === sent) { askImages = []; showAskImages(); } };
+  clear.forget = clearText.forget;
+  clear.remember = clearText.remember;
+  return clear;
+};
+// empties the fields once the request is done, but only those still holding what was sent: text typed meanwhile stays
+// the values of the request being followed, kept until its run ends: a request already sent is not a draft (see hasDraft)
+const sentValues = new Map();
+const clearIfUnchanged = (...fields) => {
+  const sent = fields.map(field => field.value);
+  fields.forEach((field, i) => sentValues.set(field, sent[i]));
+  const clear = () => fields.forEach((field, i) => { if (field.value === sent[i]) field.value = ''; });
+  clear.forget = () => fields.forEach(field => sentValues.delete(field));
+  clear.remember = () => fields.forEach((field, i) => sentValues.set(field, sent[i]));
+  return clear;
+};
+$('askForm').onsubmit = async ev => {
+  ev.preventDefault();
+  $('askSend').disabled = true;
+  const following = await sendToClaude('request', requestPayload({ via: viaOwnClaude() }), { clear: clearRequest() });
+  if (!following) $('askSend').disabled = false;  // while a run is followed, pollRun gives the button back
+};
+// the id of the worker run last started, kept so a result that lands while the page reloads is still shown (see followRunInProgress)
+const runMemory = {
+  get() { try { return sessionStorage.getItem('flowmap-run'); } catch (e) { return null; } },
+  set(id) { try { if (id == null) sessionStorage.removeItem('flowmap-run'); else sessionStorage.setItem('flowmap-run', id); } catch (e) { /* optional */ } },
+};
+// the last few things Claude did, shown while its run goes on
+function showRunEvents(events) {
+  const lines = events.slice(-5).map(event => event.kind === 'tool' ? event.name + ': ' + event.summary : event.text);
+  const text = lines.join('\n');
+  if ($('runEvents').textContent !== text) $('runEvents').textContent = text;  // polling brings the same events again and again: leave the node alone
+  $('runEvents').hidden = lines.length === 0;
+}
+// a run Claude could not finish for lack of permission: the designer allows chosen calls for this run only, or denies
+function showApproval(runId, denials) {
+  const box = $('runApproval');
+  box.replaceChildren();
+  const checks = denials.map(denial => {
+    const row = document.createElement('label');
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.disabled = !denial.rule;
+    row.append(check, denial.tool + ': ' + denial.summary + (denial.rule ? '' : ' (cannot be allowed from the app)'));
+    box.append(row);
+    return { check, rule: denial.rule };
+  });
+  const decide = async body => {
+    const focusWasHere = box.contains(document.activeElement);  // the pressed button goes away with the box: its focus moves to Cancel, unless the designer went elsewhere
+    try {
+      const r = await postJson('/__flowmap-app/runs/' + runId + '/decision', body);
+      if (r.ok) { box.hidden = true; askSay(body.allow ? 'Running…' : 'Denied.'); if (focusWasHere) $('runCancel').focus(); return; }
+      askSay((await r.json().catch(() => ({}))).error || 'Could not send the decision.');
+    } catch (e) { askSay('Could not reach the app.'); }
+  };
+  const allow = document.createElement('button');
+  allow.type = 'button'; allow.className = 'pri'; allow.textContent = 'Allow selected and continue';
+  allow.onclick = () => {
+    const rules = checks.filter(item => item.check.checked).map(item => item.rule);
+    if (rules.length === 0) askSay('Select what to allow, or deny.');
+    else decide({ allow: true, rules });
+  };
+  const deny = document.createElement('button');
+  deny.type = 'button'; deny.textContent = 'Deny';
+  deny.onclick = () => decide({ allow: false });
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  actions.append(allow, deny);
+  box.append(actions);
+  box.hidden = false;
+  askSay('Claude needs your permission to continue.');
+}
+// the app's own Claude: a headless run with the designer's own login, asked for its state every 2 s
+// `onDone` and `retry` are left out for a run found again after a reload: there is nothing the page sent to clear or to send again. Three failed asks in a row end the follow-up.
+// while a run is followed its card takes the dock's place; when it ends the dock is back on the pane that shows the outcome
+function showRunCard(on) {
+  $('runCard').hidden = !on;
+  $('runCard').classList.remove('fail');
+  $('runTitle').textContent = 'Claude is working';
+  $('runCard').setAttribute('aria-label', 'Claude is working');
+  $('runRetry').hidden = true;
+  $('runDismiss').hidden = true;
+}
+// a run that failed keeps its card, with the error the run gave, until the designer asks again (`retry`, when the page sent the request) or dismisses it
+function showRunFailed(retry) {
+  showRunCard(true);
+  $('runCard').classList.add('fail');
+  $('runTitle').textContent = 'Claude stopped';
+  $('runCard').setAttribute('aria-label', 'Claude stopped');
+  $('runCancel').hidden = true;
+  $('runRetry').disabled = false;
+  $('runRetry').hidden = !retry;
+  $('runRetry').onclick = async () => {
+    $('runRetry').disabled = true;
+    const following = await retry();
+    if (!following) $('runRetry').disabled = false;  // the card stays failed with the message; a followed run takes the card back
+  };
+  $('runDismiss').hidden = false;
+}
+$('runDismiss').onclick = () => { showRunCard(false); $('tabChange').focus(); };
+function endFollowing(onDone) {
+  showRunCard(false);
+  $('runEvents').hidden = true;
+  $('runApproval').hidden = true;
+  $('runCancel').hidden = true;
+  $('askWorker').disabled = false;
+  $('askSend').disabled = false;
+  onDone.forget?.();
+}
+function pollRun(runId, onDone = () => {}, retry) {
+  let askedFor = ''; // the denials already on screen, so polling does not redraw the checkboxes
+  let failures = 0;
+  const startedHere = Boolean(retry);  // the page sent this request: its Send or Try again button is gone, so the focus goes to the card
+  showRunCard(true);
+  $('askSend').disabled = true;
+  let cancelling = false;  // a run the designer cancelled is not a failure to retry
+  let inFlight = false;  // a slow answer must not stack a second request behind it
+  const tick = async () => {
+    if (document.hidden || inFlight) return;
+    inFlight = true;
+    try {
+      const run = await (await fetch('/__flowmap-app/runs/' + runId, { signal: AbortSignal.timeout(10000) })).json();  // a hung request counts as a failure
+      failures = 0;
+      showRunEvents(run.events || []);
+      if ($('runCancel').hidden) {  // shown while the run goes on; endFollowing hides it
+        $('runCancel').hidden = false;
+        if (startedHere) $('runCancel').focus();
+      }
+      if (run.state === 'needs-approval') {
+        if (JSON.stringify(run.denials) !== askedFor) { askedFor = JSON.stringify(run.denials); showApproval(runId, run.denials); }
+        return;
+      }
+      askedFor = '';
+      if (run.state === 'running') return;
+      clearInterval(timer);
+      endFollowing(onDone);
+      runMemory.set(null);
+      if (run.state === 'done') { onDone(); askSay(run.result); }
+      else { if (!cancelling) showRunFailed(retry); askSay(run.error || 'The run failed.'); }  // the card is on screen when its status line changes, so the change is announced
+    } catch (e) {
+      if (++failures < 3) return;  // the next tick asks again
+      clearInterval(timer);
+      endFollowing(onDone);
+      askSay('Lost contact with the app.');
+    } finally {
+      inFlight = false;
+    }
+  };
+  const timer = setInterval(tick, 2000);
+  $('runCancel').onclick = async () => {
+    cancelling = true;
+    try {
+      const r = await postJson('/__flowmap-app/runs/' + runId + '/cancel');
+      if (r.ok) tick();  // the run now reads as failed, with the cancelled message
+      else { cancelling = false; askSay((await r.json().catch(() => ({}))).error || 'Could not cancel.'); }
+    } catch (e) { cancelling = false; askSay('Could not reach the app.'); }
+  };
+  tick();
+}
+// a run that ended while the page was reloading: its result is shown once, then forgotten
+async function showEndedRun() {
+  const runId = runMemory.get();
+  if (!runId) return;
+  runMemory.set(null);
+  const r = await fetch('/__flowmap-app/runs/' + runId);
+  if (!r.ok) return;
+  const run = await r.json();
+  if (run.state === 'done') askSay(run.result);
+  else if (run.state === 'failed') askSay(run.error || 'The run failed.');
+}
+// a page that reloads while the app's own Claude works finds the run again and follows it
+async function followRunInProgress() {
+  try {
+    const r = await fetch('/__flowmap-app/runs/current');
+    if (!r.ok) { await showEndedRun(); return; }
+    $('askWorker').disabled = true;  // pollRun gives the button back
+    pollRun((await r.json()).runId);
+    askSay('Running…');
+  } catch (e) { /* without the app there is no run to follow */ }
+}
+$('askWorker').onclick = async () => {
+  $('askWorker').disabled = true;
+  const following = await sendToClaude('request', requestPayload({ via: 'worker' }), { clear: clearRequest(), startsRun: true });
+  if (!following) $('askWorker').disabled = false;  // while a run is followed, pollRun gives the button back
+};
+const viaOwnClaude = () => sessionAlive ? undefined : 'worker';
+// asks for a new screen like a request: to the linked session, or to the app's own Claude when the session is not found.
+// The button stays off while the answer is awaited; the fields are emptied once it is done, unless typed in meanwhile.
+async function sendFrom(button, endpoint, payload, fields) {
+  button.disabled = true;
+  await sendToClaude(endpoint, { ...payload, via: viaOwnClaude() }, { clear: clearIfUnchanged(...fields) });
+  button.disabled = false;
+}
+// "Reached from the selected screen": the screen a new one leads from, and the action that leads to it
+function newScreenTarget() {
+  const from = $('nsFrom').checked && cur;
+  return { from: from || undefined, action: from && $('nsAction').value || undefined };
+}
+const newScreenFields = () => [$('nsTitle'), $('nsDescription'), $('nsAction')];
+$('nsSend').onclick = () => sendFrom($('nsSend'), 'new-screen', {
+  title: $('nsTitle').value, description: $('nsDescription').value || undefined, ...newScreenTarget(),
+}, newScreenFields());
+// "Capture it now": Claude captures what the simulator, emulator or browser shows and adds it as the new screen (the description travels as the note)
+$('nsCapture').onclick = () => sendFrom($('nsCapture'), 'capture', {
+  title: $('nsTitle').value, note: $('nsDescription').value || undefined, ...newScreenTarget(),
+}, newScreenFields());
+// the "Capture now" tab: no description to write, only the title and where the app is (the note)
+$('capSend').onclick = () => sendFrom($('capSend'), 'capture', { title: $('capTitle').value, note: $('capNote').value || undefined }, [$('capTitle'), $('capNote')]);
+// a capture is asked again like a new screen: to the linked session, or to the app's own Claude when the session is not found
+$('rcSend').onclick = async () => {
+  $('rcSend').disabled = true;
+  await sendToClaude('recapture', { screen: cur, note: $('rcNote').value || undefined, via: viaOwnClaude() }, { clear: clearIfUnchanged($('rcNote')) });
+  updateTargetControls();
+};
+showAskBox();
+followRunInProgress();
+
+// the design contract (DESIGN.md of the map folder): loaded when its section opens, saved with the button
+let designEdited = false;  // the contract was typed in since it was loaded or saved
+$('designText').addEventListener('input', () => { designEdited = true; });
+$('designContract').ontoggle = async () => {
+  if (!$('designContract').open) return;
+  try {
+    const r = await fetch('/__flowmap-app/design');
+    const body = await r.json().catch(() => ({}));
+    if (r.ok) { $('designText').value = body.text; designEdited = false; $('designMsg').textContent = ''; }
+    else $('designMsg').textContent = body.error || 'Could not load the contract.';
+  } catch (e) { $('designMsg').textContent = 'Could not reach the app.'; }
+};
+$('designSave').onclick = async () => {
+  $('designSave').disabled = true;
+  try {
+    const r = await postJson('/__flowmap-app/design', { text: $('designText').value }, 'PUT');
+    const body = await r.json().catch(() => ({}));
+    if (r.ok) designEdited = false;
+    $('designMsg').textContent = r.ok ? (body.exists ? 'Saved' : 'Saved (empty: the contract was removed)') : (body.error || 'Could not save.');
+  } catch (e) { $('designMsg').textContent = 'Could not reach the app.'; }
+  $('designSave').disabled = false;
+};
+
+// the header wraps onto more rows when its controls do not fit: what is fixed under it (drawer, popovers) follows its real height
+const bar = document.querySelector('header');
+new ResizeObserver(() => document.documentElement.style.setProperty('--bar-h', bar.getBoundingClientRect().height + 'px')).observe(bar);
+rebuildMap(true);
+updateResetBtn();
+updateTargetControls();
+loadAnns();
+function openFromHash() {
+  const start = location.hash.match(/^#\/s\/(.+)$/);
+  if (start) openNav(decodeURIComponent(start[1]), true);
+}
+addEventListener('hashchange', openFromHash);
+openFromHash();
+// a reload would wipe what the designer is writing: with a draft, the page says the map changed and lets them reload when ready
+const hasDraft = () => ['askText', 'nsTitle', 'nsDescription', 'nsAction', 'capTitle', 'capNote', 'rcNote'].some(id => $(id).value !== '' && $(id).value !== sentValues.get($(id)))
+  || askImages.length > 0 || !$('groupForm').hidden || annotating || Boolean(pending) || Boolean(editing) || designEdited;
+new EventSource('/__flowmap-app/events').addEventListener('changed', () => {
+  if (hasDraft()) $('mapChanged').hidden = false;
+  else location.reload();
+});
+$('mapChangedReload').onclick = () => location.reload();
+</script>
+</body>
+</html>
