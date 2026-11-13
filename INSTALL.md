@@ -25,7 +25,7 @@ Los dos primeros los compruebas tú antes de instalar. Los demás los comprueba 
 ## 2. Instalar
 
 ```
-git clone <url del repo> flow-map
+git clone https://github.com/jamescardona11/flow-map.git flow-map
 cd flow-map
 npm install
 ./install --yes

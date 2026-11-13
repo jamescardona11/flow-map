@@ -54,7 +54,7 @@ El visor comenta una pantalla, o una zona de ella, a través de `/__flowmap/anno
 Si quien instala es un agente (Claude Code u otro), [`INSTALL.md`](INSTALL.md) tiene los pasos completos: requisitos, instalación, verificación y uso.
 
 ```
-git clone <repo> flow-map && cd flow-map && npm install
+git clone https://github.com/jamescardona11/flow-map.git flow-map && cd flow-map && npm install
 ./install                 # pregunta dónde poner el skill y el comando (y, opcional, Flow Map.app en macOS)
 ./install --yes           # sin preguntas: skill en ~/.claude/skills, comando en ~/.local/bin
 ./install --symlink --skill-dir ~/.claude/skills --bin-dir ~/.local/bin   # para desarrollar: enlaza en vez de copiar
