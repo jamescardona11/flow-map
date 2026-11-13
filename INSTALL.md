@@ -9,14 +9,16 @@ Flow Map son dos piezas que solo comparten una carpeta en disco (la carpeta del 
 
 ## 1. Requisitos
 
-Comprueba cada uno antes de instalar y dile al usuario lo que falte; no lo instales por tu cuenta.
+Los dos primeros los compruebas tú antes de instalar. Los demás los comprueba `./install` al terminar: nombra lo que falta y cómo conseguirlo (paso 2).
 
 | Requisito | Comprobación | Para qué |
 |---|---|---|
 | macOS | `uname` responde `Darwin` | El selector de carpetas, las miniaturas (`sips`) y la ventana propia solo existen en macOS. No se ha probado en Linux ni Windows. |
 | Node 24 o superior | `node --version` | La app ejecuta TypeScript sin compilar. |
 | Python 3 | `python3 --version` | El CLI del skill (`flowmap.py`); solo usa la biblioteca estándar. |
-| Una herramienta de captura | Playwright para web; `agent-device` para móvil | Tomar las capturas. Ver `skill/references/capture-backends.md`. |
+| `playwright-cli` | `playwright-cli --version` | Capturar apps web con el skill. Paquete npm `@playwright/cli`. |
+| `agent-device` | `agent-device --version` | Capturar apps iOS y Android. Paquete npm `agent-device`. Solo si se van a mapear apps móviles. |
+| Chromium de Playwright | `npx playwright screenshot --help` responde | «New screen», «Re-capture» y «Capture it now» de la app en web, que ejecutan `npx playwright screenshot`. |
 | `ffmpeg` (opcional) | `ffmpeg -version` | Exportar una ruta como video. |
 | `claude` en el PATH (opcional) | `claude --version` | «Run with a new Claude» desde la app. |
 
@@ -31,7 +33,15 @@ npm install
 
 `./install --yes` no pregunta nada: copia el skill a `~/.claude/skills/flow-map` y escribe el comando `flow-map` en `~/.local/bin`. No pisa archivos que no sean suyos y no edita el perfil del shell. Otras formas (`--symlink`, otras carpetas, `--uninstall`, `Flow Map.app`) están en la sección «Instalación» del README.
 
-Tres cosas que debes saber:
+Al terminar, el instalador lista bajo «Missing tools» las herramientas que no encuentra en el PATH, con el comando para conseguir cada una. No instala ninguna por su cuenta. Si faltan `playwright-cli` o `agent-device`:
+
+1. Pregunta al usuario si va a mapear apps web, móviles o ambas, y si quiere que las instales (son paquetes globales de npm).
+2. Con el sí, ejecuta `./install --tools`: instala con `npm install -g` las que falten de esas dos y nada más. Si solo quiere una, ejecuta el comando `npm install -g ...` que imprimió el instalador para ella.
+3. Para web, descarga el navegador una vez: `playwright-cli install-browser` (para el skill) y `npx playwright install chromium` (para las peticiones desde la app).
+
+`ffmpeg`, `claude` y Python no los instala el instalador: enséñale al usuario la línea que imprime.
+
+Tres cosas más que debes saber:
 
 - Si `~/.local/bin` no está en el PATH, el instalador imprime la línea `export PATH=...`. Enséñasela al usuario para que la añada a su perfil; no edites su perfil tú. Mientras tanto usa la ruta completa `~/.local/bin/flow-map`.
 - El comando guarda las rutas absolutas de `node` y del repo. Si el repo se mueve o cambia la versión de Node, vuelve a ejecutar `./install --yes`.

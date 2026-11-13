@@ -78,6 +78,8 @@ async function setup() {
       platform?: string;
       installApp?: (dir: string) => Promise<string>;
       copyTree?: (source: string, destination: string) => Promise<void>;
+      hasCommand?: (name: string) => boolean;
+      runCommand?: (command: string[]) => Promise<void>;
     } = {},
   ) => {
     output.length = 0;
@@ -86,6 +88,10 @@ async function setup() {
       repoDir,
       nodePath: "/usr/local/bin/node",
       pathEnv: "/usr/bin:/bin",
+      hasCommand: () => true,
+      runCommand: async () => {
+        throw new Error("must not run a command");
+      },
       ...overrides,
       out: (text: string) => void output.push(text),
       err: (text: string) => void errors.push(text),
@@ -415,5 +421,70 @@ describe("the interactive installer and the app", () => {
     expect(err()).toContain("sips is not available");
     expect(await exists(join(skills, "flow-map", "SKILL.md"))).toBe(true);
     expect(await exists(join(bin, "flow-map"))).toBe(true);
+  });
+});
+
+describe("the tools the skill and the app need", () => {
+  const missing = (...names: string[]) => (name: string) => !names.includes(name);
+
+  it("says nothing when every tool is there, and names each missing one with what it is for and how to get it, without installing any", async () => {
+    const { run, home, out } = await setup();
+    const dirs = ["--skill-dir", join(home, "skills"), "--bin-dir", join(home, "bin")];
+
+    expect(await run(dirs)).toBe(0);
+    expect(out()).not.toContain("Missing tools");
+
+    expect(await run(dirs, { hasCommand: missing("python3", "playwright-cli", "agent-device", "ffmpeg", "claude") })).toBe(0);
+    const report = out().slice(out().indexOf("Missing tools"));
+    expect(report.trimEnd().split("\n")).toEqual([
+      "Missing tools:",
+      "  python3 (required: the skill's command runs on it): install Python 3",
+      "  playwright-cli (to capture web apps): npm install -g @playwright/cli@latest",
+      "  agent-device (to capture iOS and Android apps): npm install -g agent-device",
+      "  ffmpeg (optional: export a route as video): brew install ffmpeg",
+      "  claude (optional: Run with a new Claude from the app): install Claude Code",
+      "Run `./install --tools` to install the ones that come from npm.",
+    ]);
+
+    expect(await run(dirs, { hasCommand: missing("ffmpeg") })).toBe(0);
+    expect(out(), "nothing from npm is missing").not.toContain("--tools");
+    expect(await run(["--uninstall", ...dirs], { hasCommand: missing("ffmpeg") })).toBe(0);
+    expect(out(), "an uninstall does not check").not.toContain("Missing tools");
+  });
+
+  it("--tools installs the missing npm tools and nothing else, alone or with other flags, and fails when npm does", async () => {
+    const { run, home, out, err } = await setup();
+    const ran: string[][] = [];
+    const deps = {
+      homeDir: home,
+      hasCommand: missing("playwright-cli", "agent-device", "ffmpeg"),
+      runCommand: async (command: string[]) => void ran.push(command),
+    };
+
+    expect(await run(["--tools"], deps)).toBe(0);
+    expect(ran).toEqual([
+      ["npm", "install", "-g", "@playwright/cli@latest"],
+      ["npm", "install", "-g", "agent-device"],
+    ]);
+    expect(out()).toContain("Installed tool: playwright-cli");
+    expect(out()).toContain("Installed tool: agent-device");
+    expect(out(), "what npm cannot install is still named").toContain("  ffmpeg (optional: export a route as video): brew install ffmpeg");
+    expect(out()).not.toContain("Run `./install --tools`");
+    expect(await exists(join(home, ".claude")), "--tools alone installs no skill").toBe(false);
+    expect(await exists(join(home, ".local")), "--tools alone installs no command").toBe(false);
+
+    ran.length = 0;
+    expect(await run(["--yes", "--tools"], { ...deps, hasCommand: missing("agent-device") })).toBe(0);
+    expect(ran).toEqual([["npm", "install", "-g", "agent-device"]]);
+    expect(await exists(join(home, ".claude", "skills", "flow-map", "SKILL.md"))).toBe(true);
+
+    const failing = async () => {
+      throw new Error("npm exited with code 1");
+    };
+    expect(await run(["--tools"], { ...deps, runCommand: failing })).toBe(1);
+    expect(err()).toContain("Could not install playwright-cli: npm exited with code 1");
+
+    expect(await run(["--uninstall", "--tools", "--bin-dir", join(home, "bin")], deps)).toBe(1);
+    expect(err()).toContain("Usage:");
   });
 });

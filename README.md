@@ -58,8 +58,11 @@ git clone <repo> flow-map && cd flow-map && npm install
 ./install                 # pregunta dónde poner el skill y el comando (y, opcional, Flow Map.app en macOS)
 ./install --yes           # sin preguntas: skill en ~/.claude/skills, comando en ~/.local/bin
 ./install --symlink --skill-dir ~/.claude/skills --bin-dir ~/.local/bin   # para desarrollar: enlaza en vez de copiar
+./install --tools         # instala con npm las herramientas de captura que falten (playwright-cli, agent-device)
 ./install --uninstall --skill-dir ~/.claude/skills --bin-dir ~/.local/bin
 ```
+
+Requisitos que el repo no trae: Python 3 (el CLI del skill), `playwright-cli` para capturar web, `agent-device` para capturar móvil y, opcionales, `ffmpeg` y `claude`. `./install` no instala ninguno por su cuenta: al terminar lista los que no encuentra en el PATH con el comando para conseguir cada uno, y `./install --tools` instala los dos que vienen de npm. Las peticiones de captura web desde la app usan `npx playwright screenshot`, que necesita el navegador descargado una vez (`npx playwright install chromium`).
 
 El repo trae el skill en `skill/` (SKILL.md, scripts, references, tests); `./install` lo copia a `<carpeta de skills>/flow-map` (o lo enlaza con `--symlink`) y escribe el script `flow-map` en la carpeta de comandos, con las rutas absolutas de `node` y de este repo. Nunca pisa un archivo o carpeta que no sea suyo, y si la carpeta de comandos no está en el PATH imprime la línea que hay que añadir al perfil del shell (no lo edita). La app asume el skill en `~/.claude/skills/flow-map`: si lo instalas solo en otra carpeta, el instalador lo avisa. Si mueves el repo o cambias de Node, vuelve a ejecutar `./install`. Con el comando instalado, `flow-map` abre la app en tu navegador por defecto (la arranca si no corre y escribe la URL con su puerto), `flow-map open <carpeta>` abre un mapa ahí, `flow-map app [<carpeta>]` usa una ventana propia sin pestañas y `flow-map link <carpeta>` liga el mapa a la sesión. `Flow Map.app` es opcional y no se instala por defecto.
 

@@ -1,4 +1,6 @@
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { accessSync, constants } from "node:fs";
 import { cp, mkdir, readFile, readlink, rename, rm, symlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
@@ -9,7 +11,7 @@ import { type Prompt, terminalPrompt } from "./prompt.ts";
 import { shellQuote } from "./skill-command.ts";
 
 const USAGE =
-  "Usage: install [--yes] [--skill-dir <dir>]... [--bin-dir <dir>] [--symlink] [--app [--app-dir <dir>]] [--uninstall]\n       install   (no options, in a terminal: asks what to install)\n";
+  "Usage: install [--yes] [--skill-dir <dir>]... [--bin-dir <dir>] [--symlink] [--app [--app-dir <dir>]] [--tools] [--uninstall]\n       install   (no options, in a terminal: asks what to install)\n";
 const COMMAND_NAME = "flow-map";
 /** The second line of the command script: how an uninstall or a reinstall knows the file is ours. */
 const MARKER = "# installed by flow-map";
@@ -29,6 +31,10 @@ export type InstallerDeps = {
   installApp?: (dir: string) => Promise<string>;
   /** Copies the skill folder into `destination`, which does not exist yet. */
   copyTree?: (source: string, destination: string) => Promise<void>;
+  /** Whether a command is on PATH. */
+  hasCommand?: (name: string) => boolean;
+  /** Runs a command to its end; rejects when it fails. `--tools` installs with it. */
+  runCommand?: (command: string[]) => Promise<void>;
 };
 
 type Context = {
@@ -39,7 +45,16 @@ type Context = {
   copyTree: (source: string, destination: string) => Promise<void>;
 };
 
-type Options = { skillDirs: string[]; binDir: string | undefined; symlink: boolean; uninstall: boolean; appDir: string | undefined };
+type Options = { skillDirs: string[]; binDir: string | undefined; symlink: boolean; uninstall: boolean; appDir: string | undefined; tools: boolean };
+
+/** What the skill and the app run but this installer does not ship. `npm` is the package `--tools` installs; the others only get a hint. */
+const TOOLS: { command: string; purpose: string; npm?: string; hint?: string }[] = [
+  { command: "python3", purpose: "required: the skill's command runs on it", hint: "install Python 3" },
+  { command: "playwright-cli", purpose: "to capture web apps", npm: "@playwright/cli@latest" },
+  { command: "agent-device", purpose: "to capture iOS and Android apps", npm: "agent-device" },
+  { command: "ffmpeg", purpose: "optional: export a route as video", hint: "brew install ffmpeg" },
+  { command: "claude", purpose: "optional: Run with a new Claude from the app", hint: "install Claude Code" },
+];
 
 /** A leading `~` or `~/` in an answer typed at a prompt means the home folder; the shell is not there to expand it. */
 const expandHome = (path: string, homeDir: string) => (path === "~" ? homeDir : path.startsWith("~/") ? join(homeDir, path.slice(2)) : path);
@@ -62,13 +77,17 @@ function parseRequest(argv: string[], homeDir: string): Options | Ask | undefine
         app: { type: "boolean" },
         "app-dir": { type: "string" },
         yes: { type: "boolean" },
+        tools: { type: "boolean" },
       },
     });
     const skillDirs = values["skill-dir"] ?? [];
     const binDir = values["bin-dir"];
     const appDir = values["app-dir"] ?? join(homeDir, "Applications");
+    const tools = values.tools === true;
+    if (tools && values.uninstall) return undefined;
     if (skillDirs.length === 0 && binDir === undefined && !values.app && !values.symlink && !values.uninstall) {
-      return values.yes ? defaultOptions(homeDir) : { ask: { appDir } };
+      if (values.yes) return { ...defaultOptions(homeDir), tools };
+      return tools ? { ...defaultOptions(homeDir), skillDirs: [], binDir: undefined, tools } : { ask: { appDir } };
     }
     if (skillDirs.length === 0 && binDir === undefined && !values.app) return undefined;
     return {
@@ -77,6 +96,7 @@ function parseRequest(argv: string[], homeDir: string): Options | Ask | undefine
       symlink: values.symlink === true,
       uninstall: values.uninstall === true,
       appDir: values.app ? appDir : undefined,
+      tools,
     };
   } catch {
     return undefined;
@@ -90,6 +110,7 @@ function defaultOptions(homeDir: string): Options & { binDir: string } {
     symlink: false,
     uninstall: false,
     appDir: undefined,
+    tools: false,
   };
 }
 
@@ -216,6 +237,51 @@ async function uninstallCommand(binDir: string, ctx: Context) {
   ctx.out(`Removed ${target}\n`);
 }
 
+const onPath = (name: string, pathEnv: string) =>
+  pathEnv.split(":").some((dir) => {
+    if (dir === "") return false;
+    try {
+      accessSync(join(dir, name), constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+const runToEnd = (command: string[]) =>
+  new Promise<void>((done, fail) => {
+    const child = spawn(command[0]!, command.slice(1), { stdio: "inherit" });
+    child.on("error", fail);
+    child.on("exit", (code) => (code === 0 ? done() : fail(new Error(`${command[0]} exited with code ${code}`))));
+  });
+
+/** Names the tools that are not on PATH and how to get each; with `install`, installs the ones that come from npm first. False when an install failed. */
+async function checkTools(install: boolean, deps: InstallerDeps, ctx: Context, err: (text: string) => void): Promise<boolean> {
+  const hasCommand = deps.hasCommand ?? ((name: string) => onPath(name, ctx.pathEnv));
+  const run = deps.runCommand ?? runToEnd;
+  let installed = true;
+  const missing = [];
+  for (const tool of TOOLS) {
+    if (hasCommand(tool.command)) continue;
+    if (!install || tool.npm === undefined) {
+      missing.push(tool);
+      continue;
+    }
+    try {
+      await run(["npm", "install", "-g", tool.npm]);
+      ctx.out(`Installed tool: ${tool.command}\n`);
+    } catch (error) {
+      err(`Could not install ${tool.command}: ${(error as Error).message}\n`);
+      installed = false;
+    }
+  }
+  if (missing.length === 0) return installed;
+  ctx.out("Missing tools:\n");
+  for (const tool of missing) ctx.out(`  ${tool.command} (${tool.purpose}): ${tool.npm === undefined ? tool.hint : `npm install -g ${tool.npm}`}\n`);
+  if (missing.some((tool) => tool.npm !== undefined)) ctx.out("Run `./install --tools` to install the ones that come from npm.\n");
+  return installed;
+}
+
 /** Ctrl+C and Ctrl+D at a readline question reject with an AbortError. */
 const isCancel = (error: unknown) => error instanceof Error && error.name === "AbortError";
 
@@ -271,5 +337,6 @@ export async function runInstaller(argv: string[], deps: InstallerDeps = {}): Pr
       installed = false;
     }
   }
+  installed = (await checkTools(options.tools, deps, ctx, err)) && installed;
   return installed ? 0 : 1;
 }
