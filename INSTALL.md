@@ -18,7 +18,7 @@ Los dos primeros los compruebas tú antes de instalar. Los demás los comprueba 
 | Python 3 | `python3 --version` | El CLI del skill (`flowmap.py`); solo usa la biblioteca estándar. |
 | `playwright-cli` | `playwright-cli --version` | Capturar apps web con el skill. Paquete npm `@playwright/cli`. |
 | `agent-device` | `agent-device --version` | Capturar apps iOS y Android. Paquete npm `agent-device`. Solo si se van a mapear apps móviles. |
-| Chromium de Playwright | `npx playwright screenshot --help` responde | «New screen», «Re-capture» y «Capture it now» de la app en web, que ejecutan `npx playwright screenshot`. |
+| Chromium de Playwright | no hay comprobación rápida: se descarga una vez con `npx playwright install chromium` | «New screen», «Re-capture» y «Capture it now» de la app en web, que ejecutan `npx playwright screenshot`. |
 | `ffmpeg` (opcional) | `ffmpeg -version` | Exportar una ruta como video. |
 | `claude` en el PATH (opcional) | `claude --version` | «Run with a new Claude» desde la app. |
 
